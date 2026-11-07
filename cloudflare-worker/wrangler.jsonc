@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "lifeos-cloudflare-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-07",
+  "ai": { "binding": "AI" },
+  "ai_search_namespaces": [{ "binding": "AI_SEARCH", "namespace": "default", "remote": true }],
+  "d1_databases": [{ "binding": "lifeos_data", "database_name": "lifeos-data", "database_id": "a975e9e3-7bac-47bf-9d62-8894aadbf32e", "migrations_dir": "migrations" }],
+  "queues": {
+    "producers": [{ "binding": "CONTEXT_EVENTS", "queue": "lifeos-context-events" }],
+    "consumers": [{ "queue": "lifeos-context-events", "max_batch_size": 50, "max_retries": 5, "dead_letter_queue": "lifeos-context-events-dlq" }]
+  },
+  "observability": { "traces": { "enabled": true, "head_sampling_rate": 0.1 } },
+  "ratelimits": [{ "name": "CHAT_LIMITER", "namespace_id": "472911", "simple": { "limit": 10, "period": 60 } }],
+  "vars": {
+    "PYTHON_BACKEND_URL": "https://lifeos-intel-backend.fly.dev",
+    "INTERNAL_SERVICE_SECRET": "lifeos-event-secret"
+  }
+}

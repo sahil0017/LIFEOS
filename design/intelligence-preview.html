@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIFEOS — Interactive UX Concept</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #eef3fc; background: #080d17; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 32px 16px; }
+    button { font: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #aebeff; outline-offset: 3px; }
+    .shell { width: min(100%, 440px); background: #111827; border: 1px solid #334056; border-radius: 30px; overflow: hidden; box-shadow: 0 24px 80px #0009; }
+    .banner { background: #263656; padding: 9px 16px; text-align: center; font-size: 11px; color: #d7e3ff; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; padding: 22px 22px 0; }
+    .brand { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 800; letter-spacing: .16em; }
+    .mark { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 10px; background: #8c9fff; color: #121b35; font-size: 19px; }
+    .icon-button { border: 1px solid #3c485b; border-radius: 50%; width: 36px; height: 36px; background: #202b3c; color: #d4dff2; }
+    .content { padding: 22px; min-height: 630px; }
+    .panel[hidden] { display: none; }
+    .kicker { color: #a4b7f4; font-size: 10px; text-transform: uppercase; letter-spacing: .14em; font-weight: 800; }
+    h1 { font-size: 28px; letter-spacing: -.035em; line-height: 1.18; margin: 8px 0; }
+    h2 { font-size: 16px; letter-spacing: -.01em; margin: 0; }
+    h3 { font-size: 15px; line-height: 1.35; margin: 9px 0 6px; }
+    p { margin: 0; color: #aebbd0; font-size: 13px; line-height: 1.55; }
+    .intro { margin-bottom: 22px; }
+    .section { margin-top: 24px; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .stack { display: grid; gap: 10px; }
+    .card { padding: 16px; border: 1px solid #303d50; border-radius: 15px; background: #1b2535; }
+    .featured { background: linear-gradient(125deg,#2c3b64,#202b42); border-color: #536aa9; }
+    .tag { display: inline-block; padding: 4px 8px; border-radius: 20px; background: #314469; color: #c5d4ff; font-size: 10px; font-weight: 750; }
+    .tag.muted { background: #364253; color: #c0cbd9; }
+    .link { color: #b8c8ff; background: none; border: 0; padding: 0; font-size: 12px; text-align: left; }
+    .primary, .secondary { width: 100%; padding: 12px; border-radius: 10px; font-weight: 700; font-size: 13px; margin-top: 14px; }
+    .primary { color: #17213d; border: 1px solid #aabfff; background: #b9c9ff; }
+    .secondary { color: #d5e0ff; border: 1px solid #566888; background: transparent; }
+    .row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .metric { font-size: 22px; font-weight: 750; color: #f0f3ff; }
+    .metric-label { font-size: 11px; color: #aab7ca; margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .tile { display: block; min-height: 96px; padding: 14px; text-align: left; color: #ecf1ff; border: 1px solid #36445a; border-radius: 14px; background: #1b2535; }
+    .tile strong, .tile span { display: block; }
+    .tile strong { font-size: 13px; margin: 8px 0 4px; }
+    .tile span { color: #abb9cf; font-size: 11px; line-height: 1.4; }
+    .divider { height: 1px; background: #354156; margin: 13px 0; }
+    .evidence { font-size: 11px; color: #acbcd6; line-height: 1.5; }
+    .detail { color: #aab8cf; font-size: 12px; line-height: 1.5; margin-top: 12px; }
+    .step { display: flex; gap: 12px; align-items: flex-start; }
+    .step-icon { flex: 0 0 32px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; background: #354a73; color: #d3ddff; font-weight: 700; }
+    .step h3 { margin-top: 1px; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .chip { font-size: 11px; color: #d2deff; background: #2d3d5a; border-radius: 16px; padding: 5px 9px; }
+    .label { font-size: 12px; font-weight: 700; color: #e6ecf9; }
+    input, textarea { width: 100%; font: inherit; color: #eaf0ff; padding: 12px; margin-top: 8px; border: 1px solid #455572; border-radius: 10px; background: #121a29; }
+    textarea { min-height: 82px; resize: vertical; }
+    .notice { margin-top: 16px; padding: 12px; border: 1px solid #536789; border-radius: 10px; background: #25334b; color: #e0e9fb; font-size: 12px; line-height: 1.5; }
+    .notice[hidden] { display: none; }
+    nav { display: grid; grid-template-columns: repeat(5, 1fr); padding: 10px 6px 15px; border-top: 1px solid #303b4e; background: #151e2c; }
+    nav button { border: 0; background: none; color: #9cabc0; font-size: 10px; padding: 4px 0; }
+    nav button span { display: block; font-size: 17px; margin-bottom: 5px; }
+    nav button[aria-current="page"] { color: #c5d2ff; font-weight: 700; }
+    @media (max-width: 470px) { body { display: block; padding: 0; } .shell { width: 100%; min-height: 100vh; border: 0; border-radius: 0; } .content { min-height: calc(100vh - 150px); } }
+  </style>
+</head>
+<body>
+<main class="shell">
+  <div class="banner">INTERACTIVE UX CONCEPT · All content is illustrative</div>
+  <header class="topbar">
+    <div class="brand"><span class="mark" aria-hidden="true">✦</span> LIFEOS</div>
+    <button class="icon-button" type="button" aria-label="Settings and privacy" data-screen="settings">⚙</button>
+  </header>
+  <div class="content">
+    <section class="panel" id="home" data-panel>
+      <div class="intro"><span class="kicker">Your intelligence space</span><h1>Make space for what matters.</h1><p>A clear view of your goals, patterns, and possibilities.</p></div>
+      <div class="card featured">
+        <span class="tag">YOUR INTELLIGENCE</span><h3>What would you like to work through?</h3>
+        <p>Ask a question, reflect on progress, or explore a decision.</p>
+        <button class="primary" type="button" data-screen="conversation">Ask LifeOS →</button>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Continue your goal</h2><button class="link" data-screen="goals">All goals →</button></div>
+        <div class="card">
+          <div class="row"><div><span class="tag muted">LEARNING</span><h3>Learn Python</h3><p>Keep a consistent learning habit.</p></div><div><div class="metric">3</div><div class="metric-label">sessions</div></div></div>
+          <button class="secondary" data-message="In the mobile app, a check-in records a study session. This preview does not save data.">Record a session</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Your activity</h2><button class="link" data-screen="evidence">View evidence →</button></div>
+        <div class="card"><span class="tag">BASED ON YOUR RECORDS</span><h3>Three sessions recorded</h3><p>This is a simple count from your activity, not an AI prediction.</p><div class="divider"></div><div class="evidence">Example source: 3 study check-ins for “Learn Python”.</div></div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Go a little deeper</h2></div>
+        <div class="grid">
+          <button class="tile" data-screen="scenarios">◈ <strong>Explore a decision</strong><span>Compare possible paths</span></button>
+          <button class="tile" data-screen="memory">▤ <strong>Review your memory</strong><span>See what LIFEOS knows</span></button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="card featured"><span class="tag">INTERACTIVE EXAMPLE</span><h3>See intelligence in action</h3><p>Explore a sample answer and see how different capabilities could work together.</p><button class="secondary" data-screen="model-answer">View the example →</button></div>
+      </div>
+    </section>
+
+    <section class="panel" id="goals" data-panel hidden>
+      <div class="intro"><span class="kicker">Make progress</span><h1>Goals</h1><p>Keep the things you are working toward in one place.</p></div>
+      <div class="card featured"><span class="tag">ACTIVE GOAL · EXAMPLE</span><h3>Learn Python</h3><p>Build a consistent learning habit, one session at a time.</p><div class="divider"></div><div class="row"><div><div class="metric">3</div><div class="metric-label">sessions recorded</div></div><button class="link" data-screen="goal-detail">View goal →</button></div></div>
+      <button class="secondary" data-screen="new-goal">＋ Create a goal</button>
+      <div class="section"><h2>How it works</h2><p class="detail">Goals and check-ins help build useful context. You stay in control of what you record and share.</p></div>
+    </section>
+
+    <section class="panel" id="goal-detail" data-panel hidden>
+      <div class="intro"><span class="kicker">Goal detail · example</span><h1>Learn Python</h1><p>Build a consistent learning habit, one session at a time.</p></div>
+      <div class="card"><div class="row"><div><div class="metric">3</div><div class="metric-label">sessions recorded</div></div><span class="tag">ACTIVE</span></div><button class="primary" data-message="This is a mock interaction. No study session was saved.">Record study session</button></div>
+      <div class="section"><div class="section-head"><h2>Activity</h2></div><div class="card"><p>Example activity: 3 recorded sessions.</p></div></div>
+      <button class="secondary" data-screen="goals">Back to goals</button>
+    </section>
+
+    <section class="panel" id="new-goal" data-panel hidden>
+      <div class="intro"><span class="kicker">Start with intention</span><h1>Create a goal</h1><p>What would you like to make progress on?</p></div>
+      <div class="card"><label class="label" for="goal-title">Goal name</label><input id="goal-title" placeholder="e.g. Learn Python" maxlength="120"><p class="detail">Preview only: nothing entered here is saved.</p><button class="primary" data-message="This form is a design preview and does not save data.">Create goal</button></div>
+      <button class="secondary" data-screen="goals">Back to goals</button>
+    </section>
+
+    <section class="panel" id="memory" data-panel hidden>
+      <div class="intro"><span class="kicker">You are in control</span><h1>Your memory</h1><p>See the context that can help LIFEOS respond more thoughtfully.</p></div>
+      <div class="card featured"><span class="tag">YOUR DATA</span><h3>Know what is remembered</h3><p>Personal context should be reviewable, correctable, and clearly sourced.</p></div>
+      <div class="section"><div class="section-head"><h2>Saved context</h2><span class="kicker">Example</span></div>
+        <div class="stack"><div class="card"><span class="tag">YOU ADDED</span><h3>Learning goal: Python</h3><p>Source: a goal you created.</p><button class="link" data-screen="goal-detail">View source →</button></div>
+          <div class="card"><span class="tag">FROM YOUR ACTIVITY</span><h3>3 study sessions</h3><p>Source: your recorded check-ins.</p><button class="link" data-screen="evidence">View evidence →</button></div></div>
+      </div>
+      <p class="detail">Editing and deletion are planned. Model-generated suggestions should never become facts without your approval.</p>
+    </section>
+
+    <section class="panel" id="explore" data-panel hidden>
+      <div class="intro"><span class="kicker">Think ahead</span><h1>Explore</h1><p>Understand your options without treating possibilities as facts.</p></div>
+      <div class="stack">
+        <div class="card featured"><span class="tag">SCENARIO STUDIO · PREVIEW</span><h3>What could I try next?</h3><p>Compare approaches, their trade-offs, and what you would need to know.</p><button class="primary" data-screen="scenarios">Explore a scenario →</button></div>
+        <div class="card"><span class="tag muted">CONVERSATION · PREVIEW</span><h3>Think it through together</h3><p>Ask a question and see what context informed the response.</p><button class="secondary" data-screen="conversation">Ask LifeOS</button></div>
+      </div>
+    </section>
+
+    <section class="panel" id="scenarios" data-panel hidden>
+      <div class="intro"><span class="kicker">Scenario studio · example</span><h1>Make room to learn</h1><p>Compare two possible approaches. These are illustrative options, not predictions.</p></div>
+      <div class="stack">
+        <div class="card"><span class="tag">OPTION A</span><h3>Short daily practice</h3><p>Try 20 minutes a day. It may be easier to fit in, but requires frequent context switching.</p></div>
+        <div class="card"><span class="tag">OPTION B</span><h3>Longer focused sessions</h3><p>Try two longer blocks each week. It offers deeper focus, but needs protected time.</p></div>
+        <div class="card"><span class="tag muted">ASSUMPTIONS TO CHECK</span><h3>What matters to you?</h3><p>Your available time, learning style, and existing commitments are not known in this example.</p></div>
+      </div>
+      <button class="secondary" data-screen="explore">Back to Explore</button>
+    </section>
+
+    <section class="panel" id="conversation" data-panel hidden>
+      <div class="intro"><span class="kicker">Personal intelligence</span><h1>Ask LifeOS</h1><p>Get a clearer view of your question, your context, and your options.</p></div>
+      <div class="card featured"><span class="tag muted">CONCEPT · NOT CONNECTED</span><h3>Try a sample question</h3><p>“How can I make time for learning Python this week?”</p>
+        <button class="primary" data-screen="model-answer">See sample response →</button>
+      </div>
+      <p class="detail">The next screen is a prewritten example. No model is called and no personal data is used.</p>
+      <button class="secondary" data-screen="home">Back to Intelligence</button>
+    </section>
+
+    <section class="panel" id="model-answer" data-panel hidden>
+      <div class="intro"><span class="kicker">A glimpse of intelligence</span><h1>Make time to learn</h1><p>Illustrative response to “How can I make time for learning Python this week?”</p></div>
+      <div class="stack">
+        <div class="card featured">
+          <span class="tag">SAMPLE RESPONSE · NOT GENERATED</span>
+          <h3>Choose a rhythm you can sustain</h3>
+          <p>Consider two short study blocks this week. Start with a small exercise and adjust the timing around your actual commitments.</p>
+          <div class="chip-row"><span class="chip">Personal context</span><span class="chip">Plan generation</span><span class="chip">Scenario exploration</span><span class="chip">Research experiments</span></div>
+        </div>
+        <div class="card">
+          <span class="tag">CONTEXT · EXAMPLE</span><h3>What informed this idea</h3>
+          <p>A sample Python goal and three recorded study sessions. These are mock records, not your data.</p>
+        </div>
+        <div class="card">
+          <span class="tag muted">UNCERTAINTY</span><h3>What we don’t know</h3>
+          <p>Your availability, deadlines, and preferred study times aren’t included. The two-block suggestion is an idea, not a forecast or a verified fit.</p>
+        </div>
+        <div class="card">
+          <span class="tag muted">FORECAST CONCEPT · NO MODEL RUN</span><h3>What might happen next?</h3>
+          <p>With enough study history, a forecasting model could estimate next week’s completed sessions and show an uncertainty range. Three sample sessions alone do not establish a reliable forecast.</p>
+        </div>
+        <div class="card">
+          <span class="tag muted">WORLD MODEL CONCEPT · NO SIMULATION RUN</span><h3>Explore a change</h3>
+          <p>A limited world model could compare how a short daily routine and longer weekly sessions might affect progress, under explicit assumptions—not simulate your life or guarantee an outcome.</p>
+        </div>
+        <div class="card">
+          <span class="tag muted">RESEARCH CONCEPTS · NO EXPERIMENT RUN</span><h3>Beyond conventional models</h3>
+          <p>Quantum and neuromorphic experiments could be compared with classical baselines in the Research Lab. Their usefulness and any advantage remain unproven for this task.</p>
+        </div>
+      </div>
+      <button class="primary" data-screen="model-trace">How was this created? →</button>
+      <button class="secondary" data-screen="scenarios">Compare example options</button>
+      <button class="secondary" data-screen="conversation">Back to Ask LifeOS</button>
+    </section>
+
+    <section class="panel" id="model-trace" data-panel hidden>
+      <div class="intro"><span class="kicker">Intelligence, made visible</span><h1>Behind the answer</h1><p>An illustrative workflow—not a record of models that actually ran.</p></div>
+      <div class="stack">
+        <div class="card step"><span class="step-icon">1</span><div><span class="tag muted">EXAMPLE · MEMORY</span><h3>Gather context</h3><p>Retrieve the sample Python goal and session count with user permission.</p></div></div>
+        <div class="card step"><span class="step-icon">2</span><div><span class="tag muted">EXAMPLE · GENERATIVE</span><h3>Suggest an approach</h3><p>A language model could propose options based on the question and available context.</p></div></div>
+        <div class="card step"><span class="step-icon">3</span><div><span class="tag muted">EXAMPLE · NEURO-SYMBOLIC</span><h3>Check constraints</h3><p>Rules could check any explicit time limits; none were supplied in this example, so a fit cannot be verified.</p></div></div>
+        <div class="card step"><span class="step-icon">4</span><div><span class="tag muted">EXAMPLE · EVALUATION</span><h3>Show limitations</h3><p>Identify missing availability and avoid presenting suggestions as predictions.</p></div></div>
+        <div class="card step"><span class="step-icon">5</span><div><span class="tag muted">CONCEPT · PREDICTIVE</span><h3>Estimate a measurable outcome</h3><p>A forecasting model could estimate completed sessions next week using sufficient history, a baseline, and an uncertainty range. No forecast is calculated here.</p></div></div>
+        <div class="card step"><span class="step-icon">6</span><div><span class="tag muted">CONCEPT · WORLD MODEL</span><h3>Compare possible changes</h3><p>A limited transition model could explore alternative study schedules under stated assumptions. No simulation is run here.</p></div></div>
+        <div class="card step"><span class="step-icon">7</span><div><span class="tag muted">CONCEPT · QUANTUM</span><h3>Research alternative methods</h3><p>A small quantum experiment could test an appropriate benchmark against classical methods. It is not assumed to improve this answer.</p></div></div>
+        <div class="card step"><span class="step-icon">8</span><div><span class="tag muted">CONCEPT · NEUROMORPHIC</span><h3>Research event-driven models</h3><p>A spiking-model experiment could be evaluated against a conventional baseline. It is not assumed to improve this answer or save energy.</p></div></div>
+      </div>
+      <p class="detail">All steps above are a design concept. No models or research engines ran for this example.</p>
+      <button class="secondary" data-screen="model-answer">Back to sample response</button>
+      <button class="secondary" data-screen="research">Explore research tracks</button>
+    </section>
+
+    <section class="panel" id="evidence" data-panel hidden>
+      <div class="intro"><span class="kicker">Transparency</span><h1>Behind this insight</h1><p>Understand which information contributed to the summary.</p></div>
+      <div class="card"><span class="tag">SIMPLE COUNT · EXAMPLE</span><h3>Three sessions recorded</h3><p>Source: three study check-ins linked to the “Learn Python” goal.</p><div class="divider"></div><p>This is an illustrative count, not a forecast or causal claim.</p></div>
+      <button class="secondary" data-screen="home">Back to Intelligence</button>
+    </section>
+
+    <section class="panel" id="research" data-panel hidden>
+      <div class="intro"><span class="kicker">Under the hood</span><h1>Research lab</h1><p>See what powers LIFEOS and what is still experimental.</p></div>
+      <div class="card featured"><span class="tag">AVAILABLE NOW</span><h3>Local activity summary</h3><p>A simple count of user-recorded goals and study sessions. No trained AI model is involved.</p></div>
+      <div class="section"><div class="section-head"><h2>Intelligence tracks</h2><span class="kicker">Research roadmap</span></div><div class="stack" id="engine-list"></div></div>
+    </section>
+
+    <section class="panel" id="settings" data-panel hidden>
+      <div class="intro"><span class="kicker">Your preferences</span><h1>Settings &amp; privacy</h1><p>Understand and control how your information is used.</p></div>
+      <div class="stack">
+        <div class="card"><span class="tag">CURRENT PROTOTYPE</span><h3>On-device data</h3><p>Goals and check-ins are stored locally in the mobile app. Encryption, backup, and recovery are not implemented yet.</p></div>
+        <div class="card"><span class="tag muted">PLANNED</span><h3>Cloud sync &amp; AI consent</h3><p>Cloud sync and hosted AI are not connected. Consent controls will be required before sharing personal context.</p></div>
+        <div class="card"><span class="tag muted">PLANNED</span><h3>Export &amp; deletion</h3><p>Data export, editing, and deletion are not yet available in the prototype.</p></div>
+      </div>
+      <button class="secondary" data-screen="home">Back to Intelligence</button>
+    </section>
+    <div class="notice" id="notice" role="status" hidden></div>
+  </div>
+  <nav aria-label="Main navigation">
+    <button data-screen="home" aria-current="page"><span aria-hidden="true">✦</span>Home</button>
+    <button data-screen="goals"><span aria-hidden="true">◎</span>Goals</button>
+    <button data-screen="memory"><span aria-hidden="true">▤</span>Memory</button>
+    <button data-screen="explore"><span aria-hidden="true">◈</span>Explore</button>
+    <button data-screen="research"><span aria-hidden="true">◉</span>Research</button>
+  </nav>
+</main>
+<script>
+  const tracks = [
+    ['Multimodal intelligence', 'Understand user-approved text, images, and audio.'],
+    ['World models', 'Explore limited state transitions and scenarios.'],
+    ['Quantum intelligence', 'Compare simulated quantum experiments with classical baselines.'],
+    ['Causal intelligence', 'Study interventions and their assumptions.'],
+    ['Neuro-symbolic AI', 'Check suggestions against explicit rules.'],
+    ['Cognitive memory', 'Retrieve and manage user-approved context.'],
+    ['Generative intelligence', 'Generate ideas and alternative scenarios.'],
+    ['Multi-agent intelligence', 'Compare perspectives in bounded workflows.'],
+    ['Predictive intelligence', 'Forecast narrow measurable outcomes.'],
+    ['Neuromorphic intelligence', 'Experiment with event-driven neural models.'],
+    ['Evolutionary intelligence', 'Search for better experimental configurations.'],
+    ['Self-evaluation', 'Measure results against baselines and outcomes.'],
+  ];
+  const engineList = document.getElementById('engine-list');
+  tracks.forEach(([name, description]) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const tag = document.createElement('span');
+    tag.className = 'tag muted';
+    tag.textContent = 'PLANNED';
+    const title = document.createElement('h3');
+    title.textContent = name;
+    const text = document.createElement('p');
+    text.textContent = description;
+    card.append(tag, title, text);
+    engineList.append(card);
+  });
+  const notice = document.getElementById('notice');
+  const panels = document.querySelectorAll('[data-panel]');
+  const navButtons = document.querySelectorAll('nav [data-screen]');
+  document.querySelectorAll('[data-screen]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const screen = button.dataset.screen;
+      panels.forEach((panel) => { panel.hidden = panel.id !== screen; });
+      navButtons.forEach((tab) => {
+        const active = tab.dataset.screen === screen;
+        if (active) tab.setAttribute('aria-current', 'page');
+        else tab.removeAttribute('aria-current');
+      });
+      notice.hidden = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+  document.querySelectorAll('[data-message]').forEach((button) => {
+    button.addEventListener('click', () => {
+      notice.textContent = button.dataset.message;
+      notice.hidden = false;
+      notice.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+</script>
+</body>
+</html>

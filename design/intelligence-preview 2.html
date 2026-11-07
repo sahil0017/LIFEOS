@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIFEOS Intelligence — Design Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #080b12;
+      color: #eef1fa;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 32px 16px; }
+    button { font: inherit; }
+    .frame { width: min(100%, 430px); border: 1px solid #293142; border-radius: 32px; overflow: hidden; background: #101520; box-shadow: 0 25px 90px #0009; }
+    .preview { padding: 10px 24px; background: #29364b; color: #d6e3ff; font-size: 11px; text-align: center; letter-spacing: .03em; }
+    .screen { min-height: 690px; padding: 27px 24px 24px; }
+    .header { display: flex; justify-content: space-between; align-items: center; }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 750; letter-spacing: .17em; }
+    .brand-mark { width: 30px; height: 30px; border: 1px solid #8daafa; border-radius: 10px; display: grid; place-items: center; color: #a9bdff; font-size: 17px; }
+    .settings { border: 1px solid #343d51; color: #c9d2e7; background: #1b2230; border-radius: 50%; width: 36px; height: 36px; cursor: pointer; font-size: 18px; }
+    .intro { padding: 33px 0 23px; }
+    .eyebrow { color: #9daeda; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; font-size: 10px; }
+    h1 { margin: 9px 0 9px; font-size: 29px; line-height: 1.16; letter-spacing: -.035em; }
+    .intro p, .muted { color: #a5afc3; line-height: 1.5; font-size: 13px; margin: 0; }
+    .ask { border: 1px solid #465d9f; border-radius: 17px; padding: 16px; background: linear-gradient(125deg,#222e4e,#1b2032); display: flex; align-items: center; gap: 12px; }
+    .spark { color: #adbcff; font-size: 22px; }
+    .ask-text { flex: 1; text-align: left; }
+    .ask-text strong, .ask-text span { display: block; }
+    .ask-text strong { font-size: 14px; }
+    .ask-text span { font-size: 12px; color: #abb9d9; margin-top: 4px; }
+    .arrow { border: 0; border-radius: 50%; width: 34px; height: 34px; background: #b6c8ff; color: #19264e; font-size: 20px; cursor: pointer; }
+    .section { margin-top: 28px; }
+    .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    h2 { margin: 0; font-size: 15px; letter-spacing: -.01em; }
+    .small-link { border: 0; padding: 0; color: #b3c5ff; background: transparent; cursor: pointer; font-size: 12px; }
+    .card { border: 1px solid #2a3446; border-radius: 16px; background: #19212e; padding: 17px; }
+    .tag { display: inline-block; font-size: 10px; color: #b6c6ff; background: #2a385d; border-radius: 20px; padding: 5px 8px; font-weight: 700; letter-spacing: .04em; }
+    .card h3 { font-size: 15px; margin: 12px 0 7px; }
+    .card p { color: #b1bbce; line-height: 1.55; font-size: 13px; margin: 0; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .goal-icon { width: 39px; height: 39px; display: grid; place-items: center; color: #b4c6ff; background: #293856; border-radius: 12px; font-size: 19px; }
+    .goal-body { flex: 1; }
+    .goal-body strong { display: block; font-size: 14px; }
+    .goal-body span { display: block; color: #a5b1c8; font-size: 12px; margin-top: 5px; }
+    .evidence { margin-top: 14px; padding-top: 12px; border-top: 1px solid #303a4d; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #92a4c2; font-size: 11px; }
+    .explore-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .explore-card { min-height: 82px; padding: 13px; border: 1px solid #2e394d; border-radius: 14px; color: #dbe4f8; background: #1a2331; text-align: left; cursor: pointer; }
+    .explore-card span { display: block; color: #a7bcff; font-size: 18px; margin-bottom: 8px; }
+    .explore-card strong { font-size: 12px; }
+    nav { border-top: 1px solid #283142; background: #141a25; display: grid; grid-template-columns: repeat(5, 1fr); padding: 12px 8px 16px; }
+    nav button { color: #8e9bb0; border: 0; background: none; font-size: 10px; cursor: pointer; padding: 3px 1px; }
+    nav button span { display: block; font-size: 18px; margin-bottom: 5px; }
+    nav button.active { color: #b7c8ff; }
+    button:focus-visible { outline: 2px solid #c5d5ff; outline-offset: 3px; }
+    .notice { margin-top: 20px; border: 1px solid #3a4960; background: #222c3a; color: #d9e3f2; border-radius: 12px; padding: 12px; font-size: 12px; line-height: 1.5; }
+    .hidden { display: none; }
+    .panel[hidden] { display: none; }
+    .stack { display: grid; gap: 12px; }
+    .action { width: 100%; margin-top: 14px; padding: 12px 14px; border: 1px solid #536795; border-radius: 10px; color: #c1d0ff; background: #263451; text-align: center; cursor: pointer; }
+    .field { width: 100%; margin-top: 10px; padding: 13px; border: 1px solid #43516b; border-radius: 10px; background: #111925; color: #e8edfb; font: inherit; }
+    .label { display: block; color: #dbe3f5; font-size: 12px; font-weight: 700; }
+    .detail { color: #a5b1c8; font-size: 12px; line-height: 1.5; margin-top: 8px; }
+    .planned { color: #aeb9cd; background: #303a4b; }
+    @media (max-width: 460px) {
+      body { display: block; padding: 0; background: #101520; }
+      .frame { width: 100%; min-height: 100vh; border: 0; border-radius: 0; }
+      .screen { min-height: calc(100vh - 112px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="frame">
+    <div class="preview">DESIGN PREVIEW · Sample content, not your actual data</div>
+    <div class="screen">
+      <header class="header">
+        <div class="brand"><div class="brand-mark" aria-hidden="true">✦</div> LIFEOS</div>
+        <button class="settings" type="button" aria-label="Settings and privacy" data-screen="settings">⚙</button>
+      </header>
+
+      <div class="panel" id="intelligence" data-panel>
+      <div class="intro">
+        <span class="eyebrow">Your intelligence space</span>
+        <h1>Think clearly.<br>Grow intentionally.</h1>
+        <p>A little more context for the things that matter to you.</p>
+      </div>
+
+      <div class="ask">
+        <span class="spark" aria-hidden="true">✧</span>
+        <div class="ask-text">
+          <strong>Ask LifeOS</strong>
+          <span>Explore an idea or ask a question</span>
+        </div>
+        <button class="arrow" type="button" aria-label="Open conversation preview" data-screen="conversation">→</button>
+      </div>
+
+      <section class="section" aria-labelledby="overview-title">
+        <div class="section-title"><h2 id="overview-title">Your overview</h2><button class="small-link" type="button" data-screen="goals">View goals →</button></div>
+        <div class="card row">
+          <div class="goal-icon" aria-hidden="true">◎</div>
+          <div class="goal-body"><strong>Learn Python</strong><span>3 study sessions recorded</span></div>
+          <span class="tag">EXAMPLE</span>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="insight-title">
+        <div class="section-title"><h2 id="insight-title">A moment of insight</h2><span class="eyebrow">From your activity</span></div>
+        <div class="card">
+          <span class="tag">ACTIVITY SUMMARY</span>
+          <h3>You're building a routine</h3>
+          <p>You've recorded more study sessions this week than last week. Small, consistent steps add up.</p>
+          <div class="evidence"><span>Example based on recorded sessions</span><button class="small-link" type="button" data-message="A real insight would link to the records and dates it was based on.">View evidence →</button></div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="explore-title">
+        <div class="section-title"><h2 id="explore-title">Explore</h2></div>
+        <div class="explore-grid">
+          <button class="explore-card" type="button" data-screen="scenarios"><span aria-hidden="true">◈</span><strong>Compare scenarios</strong></button>
+          <button class="explore-card" type="button" data-screen="research"><span aria-hidden="true">◉</span><strong>Research observatory</strong></button>
+        </div>
+      </section>
+      </div>
+
+      <div class="panel" id="goals" data-panel hidden>
+        <div class="intro"><span class="eyebrow">Your journey</span><h1>Your goals</h1><p>Create a learning goal and record your study sessions on this device.</p></div>
+        <div class="card">
+          <label class="label" for="goal-example">New goal</label>
+          <input class="field" id="goal-example" placeholder="e.g. Learn Python" disabled>
+          <button class="action" type="button" data-message="This is a visual mockup. Create and record goals in the actual mobile app.">Add goal</button>
+        </div>
+        <section class="section"><div class="section-title"><h2>Your learning</h2></div>
+          <div class="card"><span class="tag">EXAMPLE</span><h3>Learn Python</h3><p>3 sessions recorded</p><button class="action" type="button" data-message="Example only. The mobile app can record real study sessions locally.">Record study session</button></div>
+        </section>
+      </div>
+
+      <div class="panel" id="memory" data-panel hidden>
+        <div class="intro"><span class="eyebrow">Your context</span><h1>Memory</h1><p>Review the personal context currently stored on your device.</p></div>
+        <div class="stack">
+          <div class="card"><span class="tag">USER-ENTERED GOAL · EXAMPLE</span><h3>Learn Python</h3><p>3 recorded study sessions</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Memory controls</h3><p>Review, edit, and delete saved context. AI-generated facts will not be saved automatically.</p></div>
+        </div>
+      </div>
+
+      <div class="panel" id="explore" data-panel hidden>
+        <div class="intro"><span class="eyebrow">Ideas and possibilities</span><h1>Explore</h1><p>Consider possible paths without confusing suggestions with facts.</p></div>
+        <div class="stack">
+          <div class="card"><span class="tag planned">PREVIEW</span><h3>Scenario studio</h3><p>Compare possible choices and inspect assumptions and uncertainty.</p><button class="action" type="button" data-screen="scenarios">Open scenario studio</button></div>
+          <div class="card"><span class="tag planned">PREVIEW</span><h3>Ask LifeOS</h3><p>Explore a question with your personal context.</p><button class="action" type="button" data-screen="conversation">Open conversation</button></div>
+        </div>
+      </div>
+
+      <div class="panel" id="research" data-panel hidden>
+        <div class="intro"><span class="eyebrow">Model observatory</span><h1>Research</h1><p>Explore the twelve intelligence tracks. Only the local activity summary is currently implemented.</p></div>
+        <div class="stack">
+          <div class="card"><span class="tag">LOCAL SUMMARY AVAILABLE</span><h3>Cognitive memory</h3><p>Review user-approved context; the current plugin summarizes local activity counts.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Multimodal intelligence</h3><p>Understand approved text, images, and audio.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>World models</h3><p>Explore limited state transitions and scenarios.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Quantum intelligence</h3><p>Benchmark simulated quantum experiments against classical methods.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Causal intelligence</h3><p>Study interventions and their assumptions.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Neuro-symbolic AI</h3><p>Check suggestions against explicit rules.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Generative intelligence</h3><p>Generate ideas and alternative scenarios.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Multi-agent intelligence</h3><p>Compare perspectives in bounded workflows.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Predictive intelligence</h3><p>Forecast narrowly defined measurable outcomes.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Neuromorphic intelligence</h3><p>Experiment with event-driven neural models.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Evolutionary intelligence</h3><p>Search for better experimental configurations.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Self-evaluation</h3><p>Measure results against baselines and outcomes.</p></div>
+        </div>
+      </div>
+
+      <div class="panel" id="settings" data-panel hidden>
+        <div class="intro"><span class="eyebrow">Your controls</span><h1>Settings &amp; privacy</h1><p>Understand what the prototype does with your data.</p></div>
+        <div class="stack">
+          <div class="card"><h3>Data on this device</h3><p>The mobile prototype stores goals and check-ins locally; encryption, backup, and recovery are not implemented.</p></div>
+          <div class="card"><h3>Cloud and AI</h3><p>Cloud sync and hosted AI are not connected in the prototype.</p></div>
+          <div class="card"><span class="tag planned">PLANNED</span><h3>Data controls</h3><p>Editing, deletion, export, and consent controls are planned.</p></div>
+          <button class="action" type="button" data-screen="intelligence">Back to Intelligence</button>
+        </div>
+      </div>
+
+      <div class="panel" id="conversation" data-panel hidden>
+        <div class="intro"><span class="eyebrow">Personal intelligence</span><h1>Ask LifeOS</h1><p>A place to think through questions with your personal context.</p></div>
+        <div class="card"><span class="tag planned">PREVIEW · NOT CONNECTED</span><h3>Conversation is coming later</h3><p>This mockup does not send messages or call a model. Hosted inference will require consent, usage controls, and a backend.</p></div>
+        <button class="action" type="button" data-screen="intelligence">Back to Intelligence</button>
+      </div>
+
+      <div class="panel" id="scenarios" data-panel hidden>
+        <div class="intro"><span class="eyebrow">Explore possibilities</span><h1>Scenario studio</h1><p>Explore possible choices and make assumptions visible.</p></div>
+        <div class="card"><span class="tag planned">PREVIEW · NOT A PREDICTION</span><h3>Scenario modelling is in research</h3><p>No simulations are running in this mockup. Future scenarios should show their assumptions and limitations.</p></div>
+        <button class="action" type="button" data-screen="explore">Back to Explore</button>
+      </div>
+      <div id="notice" class="notice hidden" role="status"></div>
+    </div>
+    <nav aria-label="Preview navigation">
+      <button type="button" class="active" aria-current="page" data-screen="intelligence"><span aria-hidden="true">✦</span>Intelligence</button>
+      <button type="button" data-screen="goals"><span aria-hidden="true">◎</span>Goals</button>
+      <button type="button" data-screen="memory"><span aria-hidden="true">▤</span>Memory</button>
+      <button type="button" data-screen="explore"><span aria-hidden="true">◈</span>Explore</button>
+      <button type="button" data-screen="research"><span aria-hidden="true">◉</span>Research</button>
+    </nav>
+  </main>
+  <script>
+    const notice = document.getElementById('notice');
+    const panels = document.querySelectorAll('[data-panel]');
+    const navButtons = document.querySelectorAll('nav [data-screen]');
+    document.querySelectorAll('[data-screen]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const screen = button.dataset.screen;
+        panels.forEach((panel) => { panel.hidden = panel.id !== screen; });
+        navButtons.forEach((tab) => {
+          const active = tab.dataset.screen === screen;
+          tab.classList.toggle('active', active);
+          if (active) tab.setAttribute('aria-current', 'page');
+          else tab.removeAttribute('aria-current');
+        });
+        notice.classList.add('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+    document.querySelectorAll('[data-message]').forEach((button) => {
+      button.addEventListener('click', () => {
+        notice.textContent = button.dataset.message;
+        notice.classList.remove('hidden');
+        notice.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    });
+  </script>
+</body>
+</html>
