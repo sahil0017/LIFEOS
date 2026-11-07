@@ -42,3 +42,15 @@ the resulting embeddings are stored locally. Chat has a separate consent. The
 time and cash-flow scenario totals are arithmetic estimates, not model forecasts.
 This prototype does not include a trained temporal transformer or graph neural
 network. See [Cloudflare Worker setup](./cloudflare-worker/README.md).
+
+## Technical Architecture
+
+- **Mobile**: Expo/React Native (TypeScript) with SQLite/D1-backed data, Personal Twin, scenarios, embeddings.
+- **Edge**: Cloudflare Worker (TypeScript) — Workers AI (Gemma 4, BGE-M3), D1, Queues, rate limiting.
+- **Backend**: Python FastAPI research lab (11 modules) deployed on Fly.io.
+
+## Deployment Architecture
+
+- Mobile → Cloudflare Worker (auth, D1, AI) → Python backend (Fly.io) for heavy intelligence.
+- Worker proxies module runs to Python backend; caches insights in D1.
+- Events flow via Cloudflare Queues to trigger backend modules.
