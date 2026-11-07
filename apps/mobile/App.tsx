@@ -18,6 +18,7 @@ import { ConnectionsScreen } from './src/screens/ConnectionsScreen';
 import { HelpSearchScreen } from './src/screens/HelpSearchScreen';
 import { PrivacyScreen } from './src/screens/PrivacyScreen';
 import { HealthScreen } from './src/screens/HealthScreen';
+import { PedometerScreen } from './src/screens/PedometerScreen';
 import { VoiceScreen } from './src/screens/VoiceScreen';
 import { LearningScreen } from './src/screens/LearningScreen';
 import { AccessibilityScreen } from './src/screens/AccessibilityScreen';
@@ -32,7 +33,7 @@ import { apiFetch, deleteCaptureRemote, deleteObservationRemote, deleteScenarioR
 import type { DailyActivity } from './src/api';
 import type { ChatMessage, SearchChunk } from './src/screens/types';
 
-type Screen = 'Home' | 'Assistant' | 'Modules' | 'PersonalTwin' | 'VisualIntelligence' | 'Privacy' | 'Connections' | 'HelpSearch' | 'Health' | 'Food' | 'Environment' | 'Accessibility' | 'Learning' | 'Voice';
+type Screen = 'Home' | 'Assistant' | 'Modules' | 'PersonalTwin' | 'VisualIntelligence' | 'Privacy' | 'Connections' | 'HelpSearch' | 'Health' | 'Food' | 'Environment' | 'Accessibility' | 'Learning' | 'Voice' | 'Pedometer';
 const nav: { id: Screen; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: 'Home', label: 'Home', icon: 'home-outline' },
   { id: 'Modules', label: 'Tools', icon: 'apps-outline' }, { id: 'Privacy', label: 'Privacy', icon: 'shield-checkmark-outline' },
@@ -264,6 +265,7 @@ export default function App() {
     {!busy && screen === 'Accessibility' && <AccessibilityScreen />}
     {!busy && screen === 'Learning' && <LearningScreen />}
     {!busy && screen === 'Voice' && <VoiceScreen />}
+    {!busy && screen === 'Pedometer' && <PedometerScreen />}
     {!busy && screen === 'Food' && <FoodScreen />}
     {!busy && screen === 'HelpSearch' && <HelpSearchScreen query={helpQuery} results={helpResults} busy={helpBusy} error={helpError} onQuery={setHelpQuery} onSearch={() => void searchHelp()} onBack={() => setScreen('Modules')} />}
     {!busy && screen === 'PersonalTwin' && <ScrollView style={styles.screen} contentContainerStyle={styles.secondaryContent} keyboardShouldPersistTaps="handled"><PersonalTwinScreen goals={goals} observations={observations} patterns={patterns} scenarios={scenarios} embeddings={embeddings} insight={twinInsight} busy={twinBusy} error={twinError} aiAllowed={privacy.twinAi} configured={isApiConfigured} onOpenPrivacy={() => setScreen('Privacy')} onRecordObservation={addTwinObservation} onCreateScenario={addTwinScenario} onDeleteObservation={removeTwinObservation} onDeleteScenario={removeTwinScenario} onAnalyze={analyzeTwin} /></ScrollView>}

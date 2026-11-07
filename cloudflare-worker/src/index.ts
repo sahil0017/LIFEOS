@@ -511,6 +511,21 @@ export default {
         return json({ summary: reply });
       } catch { return json({ error: 'Summarization failed' }, 502); }
     }
+    if (url.pathname === '/signals' && request.method === 'POST') {
+      const userId = await authenticate(request);
+      if (!userId) return json({ error: 'Device access could not be verified' }, 401);
+      let body: { signal_type?: string; value?: string } = {};
+      try { body = await request.json() as { signal_type?: string; value?: string }; } catch { body = {}; }
+      const id = crypto.randomUUID();
+      await env.lifeos_data.prepare('INSERT INTO signals (id, user_id, signal_type, value, created_at) VALUES (?,?,?,?,?)').bind(id, userId, body.signal_type ?? '', body.value ?? '', new Date().toISOString()).run();
+      return json({ id });
+    }
+    if (url.pathname === '/signals' && request.method === 'GET') {
+      const userId = await authenticate(request);
+      if (!userId) return json({ error: 'Device access could not be verified' }, 401);
+      const rows = await env.lifeos_data.prepare('SELECT id, signal_type, value, created_at FROM signals WHERE user_id = ? ORDER BY created_at DESC LIMIT 50').bind(userId).all();
+      return json({ signals: rows.results });
+    }
     if (!['/chat','/twin/analyze','/vision/analyze','/context/embed','/help/search'].includes(url.pathname)) return json({ error: 'Not found' }, 404);
     if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
     const userId = await authenticate(request);
