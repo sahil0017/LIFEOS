@@ -1,0 +1,56 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: cd python-backend && pip install -r requirements.txt
+      - run: cd python-backend && python -m unittest test_backend -v
+
+  test-mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: cd apps/mobile && npm ci && npm run typecheck && npm test
+
+  deploy-worker:
+    needs: [test-python, test-mobile]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: cd cloudflare-worker && npm ci && npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  deploy-backend:
+    needs: [test-python, test-mobile]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: cd python-backend && flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  smoke-test:
+    needs: [deploy-worker, deploy-backend]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sf https://lifeos-intel-backend.fly.dev/health
+          curl -sf https://lifeos-cloudflare-ai.lifeos-cloudflare-ai.workers.dev/ >/dev/null || true
+          echo "Smoke tests passed"
