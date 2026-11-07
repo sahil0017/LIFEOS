@@ -1,14 +1,23 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { Goal } from '../goals';
 import type { ObservationCategory, TwinEmbedding, TwinObservation, TwinPattern, TwinScenario } from '../twin';
-import { Action, Card, Heading } from './ui';
 
-const categories: { id: ObservationCategory; label: string }[] = [
-  { id: 'routine', label: 'Routine' },
-  { id: 'interest', label: 'Interest' },
-  { id: 'preference', label: 'Preference' },
-  { id: 'behavior', label: 'Behavior' },
+const categories: { id: ObservationCategory; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'routine', label: 'Routine', icon: 'repeat-outline' },
+  { id: 'interest', label: 'Interest', icon: 'star-outline' },
+  { id: 'preference', label: 'Preference', icon: 'heart-outline' },
+  { id: 'behavior', label: 'Behavior', icon: 'flash-outline' },
+];
+
+type Tab = 'timeline' | 'patterns' | 'scenarios' | 'reflection';
+
+const tabs: { id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'timeline', label: 'Timeline', icon: 'time-outline' },
+  { id: 'patterns', label: 'Patterns', icon: 'pulse-outline' },
+  { id: 'scenarios', label: 'Scenarios', icon: 'git-branch-outline' },
+  { id: 'reflection', label: 'Reflect', icon: 'sparkles-outline' },
 ];
 
 interface Props {
@@ -36,6 +45,7 @@ interface Props {
 }
 
 export function PersonalTwinScreen(props: Props) {
+  const [tab, setTab] = useState<Tab>('timeline');
   const [category, setCategory] = useState<ObservationCategory>('routine');
   const [observation, setObservation] = useState('');
   const [scenarioTitle, setScenarioTitle] = useState('');
@@ -43,6 +53,7 @@ export function PersonalTwinScreen(props: Props) {
   const [weeklyHoursChange, setWeeklyHoursChange] = useState('0');
   const [monthlyCashflowChange, setMonthlyCashflowChange] = useState('0');
   const links = useMemo(() => semanticLinks(props.observations, props.embeddings), [props.observations, props.embeddings]);
+  const totalSessions = props.goals.reduce((sum, goal) => sum + goal.sessionCount, 0);
 
   async function saveObservation() {
     if (!observation.trim() || props.busy) return;
@@ -61,102 +72,209 @@ export function PersonalTwinScreen(props: Props) {
     setScenarioTitle('');
   }
 
-  return <>
-    <Heading title="Personal Digital Twin" description="A user-controlled model of your routines, interests, preferences, goals, and possible choices." />
-    <Card>
-      <Text style={styles.tag}>PRIVATE BY DEFAULT</Text>
-      <Text style={styles.body}>Your observations, patterns and scenarios are stored in your LIFEOS workspace. Analysis runs only when you enable it in Privacy and request an update.</Text>
-    </Card>
-
-    <Text style={styles.section}>Build your timeline</Text>
-    <Card>
-      <View style={styles.chipGrid}>
-        {categories.map((item) => <Pressable key={item.id} accessibilityRole="radio" accessibilityState={{ selected: category === item.id }}
-          onPress={() => setCategory(item.id)} style={[styles.chip, category === item.id && styles.selectedChip]}>
-          <Text style={[styles.chipText, category === item.id && styles.selectedChipText]}>{item.label}</Text>
-        </Pressable>)}
+  return <View style={styles.screen}>
+    {/* Header */}
+    <View style={styles.header}>
+      <View>
+        <Text style={styles.eyebrow}>PERSONAL DIGITAL TWIN</Text>
+        <Text style={styles.title}>Your twin</Text>
       </View>
-      <TextInput accessibilityLabel="Twin observation" style={styles.input} value={observation} onChangeText={setObservation}
-        maxLength={240} placeholder="e.g. I feel focused after a morning walk" placeholderTextColor="#71877a" />
-      <Action label="Add observation" disabled={!observation.trim() || props.busy} onPress={() => void saveObservation()} />
-      <Text style={styles.caption}>Add facts you want LIFEOS to consider. Avoid medical, financial, or other sensitive details.</Text>
-    </Card>
+      <View style={styles.headerStats}>
+        <HeaderStat value={props.observations.length} label="signals" />
+        <HeaderStat value={props.patterns.length} label="patterns" />
+        <HeaderStat value={props.scenarios.length} label="scenarios" />
+      </View>
+    </View>
 
-    <Text style={styles.section}>Observed patterns</Text>
-    {props.patterns.length === 0
-      ? <Text style={styles.body}>Repeated patterns appear after you record the same routine, interest, preference, or behavior more than once.</Text>
-      : props.patterns.map((pattern) => <Card key={pattern.key}>
-        <Text style={styles.tag}>{pattern.category.toUpperCase()} · {pattern.count} ENTRIES</Text>
-        <Text style={styles.cardTitle}>{pattern.label}</Text>
-        <Text style={styles.caption}>Repeated entry count from your local timeline. This is evidence of repetition, not a prediction.</Text>
-      </Card>)}
+    {/* Tab bar */}
+    <View style={styles.tabBar}>
+      {tabs.map((item) => (
+        <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: tab === item.id }}
+          onPress={() => setTab(item.id)} style={[styles.tab, tab === item.id && styles.tabActive]}>
+          <Ionicons name={item.icon} size={13} color={tab === item.id ? '#07150b' : '#8fa594'} />
+          <Text style={[styles.tabText, tab === item.id && styles.tabTextActive]}>{item.label}</Text>
+        </Pressable>
+      ))}
+    </View>
 
-    {props.observations.length > 0 && <>
-      <Text style={styles.section}>Recent observations</Text>
-      {props.observations.slice(0, 20).map((item) => <Card key={item.id}>
-        <Text style={styles.tag}>{item.category.toUpperCase()} · {new Date(item.occurredAt).toLocaleDateString()}</Text>
-        <Text style={styles.body}>{item.label}</Text>
-        <Action label={`Delete ${item.category} observation`} secondary disabled={props.busy} onPress={() => void props.onDeleteObservation(item.id)} />
-      </Card>)}
-    </>}
+    {tab === 'timeline' && <ScrollView style={styles.tabScroll} contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.composeCard}>
+        <Text style={styles.cardEyebrow}>RECORD AN OBSERVATION</Text>
+        <View style={styles.chipRow}>
+          {categories.map((item) => (
+            <Pressable key={item.id} accessibilityRole="radio" accessibilityState={{ selected: category === item.id }}
+              onPress={() => setCategory(item.id)} style={[styles.chip, category === item.id && styles.chipSelected]}>
+              <Ionicons name={item.icon} size={11} color={category === item.id ? '#07150b' : '#8fa594'} />
+              <Text style={[styles.chipText, category === item.id && styles.chipTextSelected]}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <TextInput accessibilityLabel="Twin observation" style={styles.input} value={observation} onChangeText={setObservation}
+          maxLength={240} placeholder="e.g. I feel focused after a morning walk" placeholderTextColor="#6c7f70" />
+        <Pressable accessibilityRole="button" disabled={!observation.trim() || props.busy} onPress={() => void saveObservation()}
+          style={[styles.primaryButton, (!observation.trim() || props.busy) && styles.disabled]}>
+          {props.busy ? <ActivityIndicator color="#07150b" size="small" /> : <Text style={styles.primaryText}>Add to timeline</Text>}
+        </Pressable>
+        <Text style={styles.note}>Add facts you want LIFEOS to consider. Avoid sensitive details.</Text>
+      </View>
 
-    {links.length > 0 && <>
-      <Text style={styles.section}>Semantic links</Text>
-      <Text style={styles.caption}>Similarity can surface related notes; it does not establish a real-world connection.</Text>
-      {links.slice(0, 5).map((link) => <Card key={link.key}>
-        <Text style={styles.cardTitle}>{link.left} ↔ {link.right}</Text>
-        <Text style={styles.caption}>{Math.round(link.similarity * 100)}% cosine similarity</Text>
-      </Card>)}
-    </>}
+      {props.observations.length === 0
+        ? <EmptyState icon="time-outline" text="Your timeline is empty. Record your first observation above." />
+        : props.observations.slice(0, 20).map((item) => {
+          const meta = categories.find((c) => c.id === item.category) ?? categories[0];
+          return (
+            <View key={item.id} style={styles.timelineRow}>
+              <View style={styles.timelineIcon}><Ionicons name={meta.icon} size={12} color="#65e99a" /></View>
+              <View style={styles.timelineCopy}>
+                <Text style={styles.timelineLabel}>{item.label}</Text>
+                <Text style={styles.timelineMeta}>{meta.label} · {new Date(item.occurredAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Delete observation: ${item.label}`}
+                disabled={props.busy} onPress={() => void props.onDeleteObservation(item.id)} style={styles.deleteButton}>
+                <Ionicons name="trash-outline" size={14} color="#ff9b9b" />
+              </Pressable>
+            </View>
+          );
+        })}
+      {props.observations.length > 20 && <Text style={styles.moreNote}>Showing 20 most recent of {props.observations.length} observations.</Text>}
+    </ScrollView>}
 
-    <Text style={styles.section}>Twin reflection</Text>
-    <Card>
-      {props.insight && <>
-        <Text style={styles.tag}>REFLECTION</Text>
-        <Text style={styles.body}>{props.insight}</Text>
+    {tab === 'patterns' && <ScrollView style={styles.tabScroll} contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {props.patterns.length === 0
+        ? <EmptyState icon="pulse-outline" text="Repeated patterns appear after you record the same routine, interest, preference, or behavior more than once." />
+        : props.patterns.map((pattern) => {
+          const meta = categories.find((c) => c.id === pattern.category) ?? categories[0];
+          return (
+            <View key={pattern.key} style={styles.patternCard}>
+              <View style={styles.patternTop}>
+                <View style={[styles.patternIcon, { backgroundColor: '#153b24' }]}><Ionicons name={meta.icon} size={14} color="#73f5a8" /></View>
+                <View style={styles.patternCopy}>
+                  <Text style={styles.patternLabel}>{pattern.label}</Text>
+                  <Text style={styles.patternMeta}>{meta.label} · repeated {pattern.count}×</Text>
+                </View>
+                <View style={styles.patternBadge}><Text style={styles.patternBadgeText}>{pattern.count}</Text></View>
+              </View>
+            </View>
+          );
+        })}
+      {links.length > 0 && <>
+        <Text style={styles.groupTitle}>SEMANTIC LINKS</Text>
+        <Text style={styles.note}>Similarity can surface related notes; it does not establish a real-world connection.</Text>
+        {links.slice(0, 5).map((link) => (
+          <View key={link.key} style={styles.linkRow}>
+            <Ionicons name="link-outline" size={12} color="#a3d4ff" />
+            <View style={styles.linkCopy}>
+              <Text style={styles.linkLabel} numberOfLines={1}>{link.left} ↔ {link.right}</Text>
+              <Text style={styles.linkMeta}>{Math.round(link.similarity * 100)}% similar</Text>
+            </View>
+          </View>
+        ))}
       </>}
-      {props.error && <Text accessibilityRole="alert" style={styles.error}>{props.error}</Text>}
-      {props.busy && <ActivityIndicator color="#61e894" style={styles.loading} />}
-      {!props.aiAllowed ? <Action label="Manage this in Privacy" secondary onPress={props.onOpenPrivacy} /> : !props.configured ? <Text style={styles.caption}>Analysis is not available yet.</Text> : <Action label="Update my Twin" disabled={props.busy || (props.observations.length === 0 && props.goals.length === 0 && props.scenarios.length === 0)} onPress={() => void props.onAnalyze()} />}
-      <Text style={styles.caption}>Each update is requested by you. Treat reflections as ideas to review, not facts or professional advice.</Text>
-    </Card>
+    </ScrollView>}
 
-    <Text style={styles.section}>Compare a possible change</Text>
-    <Card>
-      <TextInput accessibilityLabel="Scenario name" style={styles.input} value={scenarioTitle} onChangeText={setScenarioTitle}
-        maxLength={100} placeholder="e.g. Change career" placeholderTextColor="#71877a" />
-      <Text style={styles.label}>Time horizon</Text>
-      <View style={styles.chipGrid}>
-        {[3, 6, 12].map((months) => <Pressable key={months} accessibilityRole="radio" accessibilityState={{ selected: horizonMonths === months }}
-          onPress={() => setHorizonMonths(months)} style={[styles.chip, horizonMonths === months && styles.selectedChip]}>
-          <Text style={[styles.chipText, horizonMonths === months && styles.selectedChipText]}>{months} months</Text>
-        </Pressable>)}
+    {tab === 'scenarios' && <ScrollView style={styles.tabScroll} contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.composeCard}>
+        <Text style={styles.cardEyebrow}>COMPARE A POSSIBLE CHANGE</Text>
+        <TextInput accessibilityLabel="Scenario name" style={styles.input} value={scenarioTitle} onChangeText={setScenarioTitle}
+          maxLength={100} placeholder="e.g. Change career" placeholderTextColor="#6c7f70" />
+        <Text style={styles.fieldLabel}>Time horizon</Text>
+        <View style={styles.chipRow}>
+          {[3, 6, 12].map((months) => (
+            <Pressable key={months} accessibilityRole="radio" accessibilityState={{ selected: horizonMonths === months }}
+              onPress={() => setHorizonMonths(months)} style={[styles.chip, horizonMonths === months && styles.chipSelected]}>
+              <Text style={[styles.chipText, horizonMonths === months && styles.chipTextSelected]}>{months} mo</Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.fieldPair}>
+          <View style={styles.fieldHalf}>
+            <Text style={styles.fieldLabel}>Weekly hours</Text>
+            <TextInput accessibilityLabel="Estimated weekly time change in hours" style={styles.input} value={weeklyHoursChange}
+              onChangeText={setWeeklyHoursChange} keyboardType="numbers-and-punctuation" placeholder="e.g. 4 or -2" placeholderTextColor="#6c7f70" />
+          </View>
+          <View style={styles.fieldHalf}>
+            <Text style={styles.fieldLabel}>Monthly cash</Text>
+            <TextInput accessibilityLabel="Estimated monthly cash flow change" style={styles.input} value={monthlyCashflowChange}
+              onChangeText={setMonthlyCashflowChange} keyboardType="numbers-and-punctuation" placeholder="e.g. 500 or -300" placeholderTextColor="#6c7f70" />
+          </View>
+        </View>
+        <Pressable accessibilityRole="button" disabled={!scenarioTitle.trim() || props.busy} onPress={() => void saveScenario()}
+          style={[styles.primaryButton, (!scenarioTitle.trim() || props.busy) && styles.disabled]}>
+          <Text style={styles.primaryText}>Save scenario</Text>
+        </Pressable>
+        <Text style={styles.note}>Arithmetic comparisons from your estimates, not learned forecasts.</Text>
       </View>
-      <Text style={styles.label}>Estimated weekly time change (hours)</Text>
-      <TextInput accessibilityLabel="Estimated weekly time change in hours" style={styles.input} value={weeklyHoursChange} onChangeText={setWeeklyHoursChange}
-        keyboardType="numbers-and-punctuation" placeholder="e.g. 4 or -2" placeholderTextColor="#71877a" />
-      <Text style={styles.label}>Estimated monthly cash-flow change (your currency)</Text>
-      <TextInput accessibilityLabel="Estimated monthly cash flow change" style={styles.input} value={monthlyCashflowChange} onChangeText={setMonthlyCashflowChange}
-        keyboardType="numbers-and-punctuation" placeholder="e.g. 500 or -300" placeholderTextColor="#71877a" />
-      <Action label="Save scenario" disabled={!scenarioTitle.trim() || props.busy} onPress={() => void saveScenario()} />
-      <Text style={styles.caption}>These are arithmetic comparisons from your estimates, not learned forecasts. Positive cash flow means more money available each month.</Text>
-    </Card>
-    {props.scenarios.map((scenario) => {
-      const totalTime = scenario.weeklyHoursChange * 4.33 * scenario.horizonMonths;
-      const totalCashflow = scenario.monthlyCashflowChange * scenario.horizonMonths;
-      return <Card key={scenario.id}>
-        <Text style={styles.tag}>USER-DEFINED SCENARIO · {scenario.horizonMonths} MONTHS</Text>
-        <Text style={styles.cardTitle}>{scenario.title}</Text>
-        <Text style={styles.body}>{signed(totalTime, 'hours')} time · {signed(totalCashflow, 'in your currency')} net cash flow</Text>
-        <Text style={styles.caption}>Linear estimate from your weekly and monthly inputs; actual outcomes may differ.</Text>
-        <Action label={`Delete scenario ${scenario.title}`} secondary disabled={props.busy} onPress={() => void props.onDeleteScenario(scenario.id)} />
-      </Card>;
-    })}
 
-    <Text style={styles.section}>Model roadmap</Text>
-    <Card><Text style={styles.cardTitle}>Available now</Text><Text style={styles.body}>Local activity counts, scenario comparisons and optional reflections on demand.</Text></Card>
-    <Card><Text style={styles.cardTitle}>Next research steps</Text><Text style={styles.body}>A personal graph and sequence model need richer, consented time-series data and outcome tracking. This version does not contain a trained temporal transformer or graph neural network.</Text></Card>
-  </>;
+      {props.scenarios.length === 0
+        ? <EmptyState icon="git-branch-outline" text="No scenarios yet. Save one above to compare a possible life change." />
+        : props.scenarios.map((scenario) => {
+          const totalTime = scenario.weeklyHoursChange * 4.33 * scenario.horizonMonths;
+          const totalCashflow = scenario.monthlyCashflowChange * scenario.horizonMonths;
+          return (
+            <View key={scenario.id} style={styles.scenarioCard}>
+              <View style={styles.scenarioTop}>
+                <View style={styles.scenarioIcon}><Ionicons name="git-branch-outline" size={15} color="#73f5a8" /></View>
+                <View style={styles.scenarioCopy}>
+                  <Text style={styles.scenarioTitle} numberOfLines={1}>{scenario.title}</Text>
+                  <Text style={styles.scenarioMeta}>{scenario.horizonMonths} months · your assumptions</Text>
+                </View>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Delete scenario: ${scenario.title}`}
+                  disabled={props.busy} onPress={() => void props.onDeleteScenario(scenario.id)} style={styles.deleteButton}>
+                  <Ionicons name="trash-outline" size={14} color="#ff9b9b" />
+                </Pressable>
+              </View>
+              <View style={styles.scenarioStats}>
+                <Stat value={signed(totalTime, 'h')} label="total time" tone={totalTime >= 0 ? 'good' : 'warn'} />
+                <Stat value={signed(totalCashflow, '')} label="net cash flow" tone={totalCashflow >= 0 ? 'good' : 'warn'} />
+              </View>
+            </View>
+          );
+        })}
+    </ScrollView>}
+
+    {tab === 'reflection' && <ScrollView style={styles.tabScroll} contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.composeCard}>
+        <Text style={styles.cardEyebrow}>TWIN REFLECTION</Text>
+        {props.insight
+          ? <Text style={styles.insight}>{props.insight}</Text>
+          : <Text style={styles.note}>Run an update to get a reflection grounded in your {props.observations.length} observations, {props.goals.length} goals ({totalSessions} sessions) and {props.scenarios.length} scenarios.</Text>}
+        {props.error && <Text accessibilityRole="alert" style={styles.error}>{props.error}</Text>}
+        {props.busy && <ActivityIndicator color="#61e894" style={styles.loading} />}
+        {!props.aiAllowed
+          ? <>
+            <View style={styles.lockedCard}>
+              <Ionicons name="lock-closed-outline" size={16} color="#d6c179" />
+              <Text style={styles.lockedText}>Twin analysis is off. Enable it in Privacy first — LIFEOS only sends data when you ask.</Text>
+            </View>
+            <Pressable accessibilityRole="button" onPress={props.onOpenPrivacy} style={styles.secondaryButton}>
+              <Text style={styles.secondaryText}>Open Privacy</Text>
+            </Pressable>
+          </>
+          : !props.configured
+            ? <Text style={styles.note}>Analysis is not available yet. Connect the LIFEOS service first.</Text>
+            : <Pressable accessibilityRole="button" disabled={props.busy || (props.observations.length === 0 && props.goals.length === 0 && props.scenarios.length === 0)}
+              onPress={() => void props.onAnalyze()} style={[styles.primaryButton, (props.busy || (props.observations.length === 0 && props.goals.length === 0 && props.scenarios.length === 0)) && styles.disabled]}>
+              <Text style={styles.primaryText}>Update my Twin</Text>
+            </Pressable>}
+        <Text style={styles.note}>Each update is requested by you. Treat reflections as ideas to review, not facts or advice.</Text>
+      </View>
+    </ScrollView>}
+  </View>;
+}
+
+function HeaderStat({ value, label }: { value: number; label: string }) {
+  return <View style={styles.headerStat}><Text style={styles.headerStatValue}>{value}</Text><Text style={styles.headerStatLabel}>{label}</Text></View>;
+}
+
+function EmptyState({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+  return <View style={styles.emptyCard}>
+    <Ionicons name={icon} size={17} color="#72df98" />
+    <Text style={styles.emptyText}>{text}</Text>
+  </View>;
+}
+
+function Stat({ value, label, tone }: { value: string; label: string; tone: 'good' | 'warn' }) {
+  return <View style={styles.stat}><Text style={[styles.statValue, tone === 'warn' && styles.statWarn]}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>;
 }
 
 function semanticLinks(observations: readonly TwinObservation[], embeddings: readonly TwinEmbedding[]) {
@@ -196,22 +314,94 @@ function cosine(a: readonly number[], b: readonly number[]): number {
 
 function signed(value: number, unit: string): string {
   const rounded = Math.round(value * 10) / 10;
-  return `${rounded > 0 ? '+' : ''}${rounded} ${unit}`;
+  return `${rounded > 0 ? '+' : ''}${rounded}${unit ? ` ${unit}` : ''}`;
 }
 
 const styles = StyleSheet.create({
-  section: { color: '#eaf4ec', fontSize: 18, lineHeight: 24, fontWeight: '700', marginTop: 24, marginBottom: 12 },
-  cardTitle: { color: '#eaf4ec', fontSize: 16, fontWeight: '700', lineHeight: 23, marginBottom: 6 },
-  tag: { color: '#79d99b', fontSize: 10, fontWeight: '700', letterSpacing: 0.8, lineHeight: 15, marginBottom: 8 },
-  body: { color: '#b8cbbd', fontSize: 14, lineHeight: 22 },
-  caption: { color: '#8fa594', fontSize: 12, lineHeight: 18, marginTop: 8 },
-  label: { color: '#d7e8da', fontWeight: '600', fontSize: 13, lineHeight: 19, marginTop: 12, marginBottom: 7 },
-  input: { backgroundColor: '#0b160f', color: '#edf7ef', borderColor: '#294333', borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 16, lineHeight: 22, marginTop: 10, minHeight: 50 },
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-  chip: { borderWidth: 1, borderColor: '#294333', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: '#0b160f' },
-  selectedChip: { backgroundColor: '#153b26', borderColor: '#58b97b' },
-  chipText: { color: '#b8cbbd', fontSize: 12, lineHeight: 17 },
-  selectedChipText: { color: '#eaf4ec', fontWeight: '700' },
-  error: { color: '#ff9b9b', marginBottom: 12, lineHeight: 20 },
-  loading: { marginBottom: 12 },
+  screen: { flex: 1, backgroundColor: '#06100b' },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 14 },
+  eyebrow: { color: '#78d99a', fontSize: 9, letterSpacing: 1.3, fontWeight: '700', marginBottom: 5 },
+  title: { color: '#f0f8f2', fontSize: 28, lineHeight: 34, fontWeight: '700' },
+  headerStats: { flexDirection: 'row', gap: 7, paddingTop: 4 },
+  headerStat: { alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 12, backgroundColor: '#0d1b12', borderWidth: 1, borderColor: '#1d3927', minWidth: 52 },
+  headerStatValue: { color: '#61e894', fontSize: 15, fontWeight: '700' },
+  headerStatLabel: { color: '#829687', fontSize: 8, marginTop: 1 },
+
+  // Tabs
+  tabBar: { flexDirection: 'row', gap: 6, paddingHorizontal: 18, paddingVertical: 12 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 11, backgroundColor: '#0d1b12', borderWidth: 1, borderColor: '#1d3927' },
+  tabActive: { backgroundColor: '#61e894', borderColor: '#61e894' },
+  tabText: { color: '#8fa594', fontSize: 11, fontWeight: '600' },
+  tabTextActive: { color: '#07150b', fontWeight: '700' },
+  tabContent: { paddingHorizontal: 18, paddingBottom: 30, maxWidth: 720, width: '100%', alignSelf: 'center', gap: 10 },
+  tabScroll: { flex: 1 },
+
+  // Compose card
+  composeCard: { padding: 15, borderRadius: 18, backgroundColor: '#0d1b12', borderWidth: 1, borderColor: '#244a32' },
+  cardEyebrow: { color: '#73f5a8', fontSize: 9, fontWeight: '700', letterSpacing: 1.1, marginBottom: 11 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 10 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#294333', borderRadius: 17, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: '#0b160f' },
+  chipSelected: { backgroundColor: '#61e894', borderColor: '#61e894' },
+  chipText: { color: '#b8cbbd', fontSize: 11, lineHeight: 16 },
+  chipTextSelected: { color: '#07150b', fontWeight: '700' },
+  input: { backgroundColor: '#0b160f', color: '#edf7ef', borderColor: '#294333', borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 14, lineHeight: 20, minHeight: 46 },
+  primaryButton: { minHeight: 46, borderRadius: 12, backgroundColor: '#61e894', alignItems: 'center', justifyContent: 'center', marginTop: 11 },
+  primaryText: { color: '#07150b', fontSize: 13, fontWeight: '700' },
+  secondaryButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: '#35774d', backgroundColor: '#132c1d', alignItems: 'center', justifyContent: 'center', marginTop: 11 },
+  secondaryText: { color: '#84f6b0', fontSize: 12, fontWeight: '700' },
+  disabled: { opacity: 0.5 },
+  note: { color: '#8fa594', fontSize: 10, lineHeight: 16, marginTop: 9 },
+
+  // Timeline rows
+  timelineRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, backgroundColor: '#0c1910', borderWidth: 1, borderColor: '#1d3927' },
+  timelineIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: '#153b24', alignItems: 'center', justifyContent: 'center' },
+  timelineCopy: { flex: 1, minWidth: 0 },
+  timelineLabel: { color: '#eaf4ec', fontSize: 12, lineHeight: 17 },
+  timelineMeta: { color: '#829687', fontSize: 9, marginTop: 3 },
+  deleteButton: { padding: 8 },
+  moreNote: { color: '#687b6d', fontSize: 10, textAlign: 'center', paddingVertical: 4 },
+
+  // Patterns
+  patternCard: { padding: 13, borderRadius: 15, backgroundColor: '#0d1b12', borderWidth: 1, borderColor: '#1d3927' },
+  patternTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  patternIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  patternCopy: { flex: 1, minWidth: 0 },
+  patternLabel: { color: '#eaf4ec', fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  patternMeta: { color: '#829687', fontSize: 9, marginTop: 3 },
+  patternBadge: { minWidth: 30, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10, backgroundColor: '#153b26', alignItems: 'center' },
+  patternBadgeText: { color: '#8ee9aa', fontSize: 12, fontWeight: '700' },
+  groupTitle: { color: '#68cb89', fontSize: 9, letterSpacing: 1.1, fontWeight: '700', marginTop: 10 },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 9, padding: 11, borderRadius: 12, backgroundColor: '#0b1420', borderWidth: 1, borderColor: '#1c2e45' },
+  linkCopy: { flex: 1, minWidth: 0 },
+  linkLabel: { color: '#dcebe0', fontSize: 11, lineHeight: 16 },
+  linkMeta: { color: '#829687', fontSize: 9, marginTop: 2 },
+
+  // Scenarios
+  fieldLabel: { color: '#d7e8da', fontWeight: '600', fontSize: 11, lineHeight: 16, marginTop: 10, marginBottom: 6 },
+  fieldPair: { flexDirection: 'row', gap: 9 },
+  fieldHalf: { flex: 1 },
+  scenarioCard: { padding: 14, borderRadius: 16, backgroundColor: '#0d1b12', borderWidth: 1, borderColor: '#244a32' },
+  scenarioTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  scenarioIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#153b24', alignItems: 'center', justifyContent: 'center' },
+  scenarioCopy: { flex: 1, minWidth: 0 },
+  scenarioTitle: { color: '#eaf4ec', fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  scenarioMeta: { color: '#829687', fontSize: 9, marginTop: 3 },
+  scenarioStats: { flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#203a29' },
+  stat: { flex: 1, alignItems: 'center' },
+  statValue: { color: '#61e894', fontSize: 15, fontWeight: '700' },
+  statWarn: { color: '#e6c979' },
+  statLabel: { color: '#829687', fontSize: 9, marginTop: 2 },
+
+  // Reflection
+  insight: { color: '#eaf4ec', fontSize: 13, lineHeight: 21 },
+  error: { color: '#ff9b9b', fontSize: 11, lineHeight: 17 },
+  loading: { marginVertical: 10 },
+  lockedCard: { flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 13, borderWidth: 1, borderColor: '#3c3928', backgroundColor: '#19180f', padding: 12 },
+  lockedText: { flex: 1, color: '#d9e8dc', fontSize: 10, lineHeight: 15 },
+
+  // Empty
+  emptyCard: { flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 14, borderWidth: 1, borderColor: '#1d3927', backgroundColor: '#0b1710', padding: 14 },
+  emptyText: { flex: 1, color: '#8fa594', fontSize: 11, lineHeight: 17 },
 });

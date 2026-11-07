@@ -18,7 +18,7 @@ export function EnvironmentScreen() {
     finally { setBusy(false); }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { const timer = setTimeout(() => { void load(); }, 0); return () => clearTimeout(timer); }, []);
 
   return (
     <ScrollView contentContainerStyle={styles.content}>

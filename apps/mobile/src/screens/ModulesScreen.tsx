@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { moduleDefinitions, relatedModules } from '../context';
 import type { ModuleDefinition, ModuleId } from '../context';
 import { runModuleRemote } from '../api';
+import type { Screen } from '../useLifeOs';
 
 const moduleGlyphs: Record<ModuleId, keyof typeof Ionicons.glyphMap> = {
   assistant: 'sparkles-outline',
@@ -18,32 +19,30 @@ const moduleGlyphs: Record<ModuleId, keyof typeof Ionicons.glyphMap> = {
   accessibility: 'accessibility-outline'
 };
 
+/** The intelligence engines available on the Python backend (single source of truth, deduped). */
 export type IntelligenceId =
   | 'generative' | 'predictive' | 'world_model' | 'causal'
   | 'multi_agent' | 'neuro_symbolic' | 'cognitive_memory'
   | 'multimodal' | 'quantum' | 'neuromorphic' | 'multiverse';
 
-export interface IntelligenceDefinition {
+interface IntelligenceDefinition {
   id: IntelligenceId;
   name: string;
   glyph: keyof typeof Ionicons.glyphMap;
   description: string;
-  category: string;
-  status: 'READY' | 'EXPERIMENTAL';
-  defaultAction: string;
+  category: 'Core' | 'Experimental';
 }
 
 const intelligenceDefinitions: IntelligenceDefinition[] = [
-  { id: 'multiverse', name: 'Multiverse AI', glyph: 'git-network-outline', description: 'Generate multiple possible futures from one situation (Monte Carlo).', category: 'Core', status: 'READY', defaultAction: 'Simulate Future Scenarios' },
-  { id: 'cognitive_memory', name: 'Self Intelligence', glyph: 'person-outline', description: 'Personal knowledge graph, memory, habits, goals, and preferences.', category: 'Core', status: 'READY', defaultAction: 'Build Personal Knowledge Graph' },
-  { id: 'multi_agent', name: 'Decision Intelligence', glyph: 'git-branch-outline', description: 'Compare choices, scenarios, opportunity costs, and uncertainty.', category: 'Core', status: 'READY', defaultAction: 'Compare Decision Options' },
-  { id: 'world_model', name: 'Future Intelligence', glyph: 'telescope-outline', description: 'Simulate career, financial, and learning trajectories.', category: 'Core', status: 'READY', defaultAction: 'Simulate Future Scenarios' },
-  { id: 'generative', name: 'Creative Intelligence', glyph: 'color-wand-outline', description: 'Generate unconventional ideas and challenge assumptions.', category: 'Core', status: 'READY', defaultAction: 'Generate Creative Ideas' },
-  { id: 'multimodal', name: 'Bio Intelligence', glyph: 'heart-outline', description: 'Wellness, sleep, activity, and sensor pattern insights.', category: 'Core', status: 'READY', defaultAction: 'Analyze Wellness Patterns' },
-  { id: 'predictive', name: 'Growth Intelligence', glyph: 'trending-up-outline', description: 'Learning paths, skill gaps, and adaptive recommendations.', category: 'Core', status: 'READY', defaultAction: 'Build Learning Path' },
-  { id: 'quantum', name: 'Quantum Possibility Engine', glyph: 'infinite-outline', description: 'Distribution of possible outcomes via probabilistic simulation.', category: 'Experimental', status: 'EXPERIMENTAL', defaultAction: 'Sample Outcome Distribution' },
-  { id: 'generative', name: 'Controlled Hallucination', glyph: 'sparkles-outline', description: 'Exploratory mode generating novel, speculative ideas.', category: 'Experimental', status: 'EXPERIMENTAL', defaultAction: 'Explore Novel Ideas' },
-  { id: 'cognitive_memory', name: 'Personal Cognitive Memory', glyph: 'time-outline', description: 'Hyperdimensional associative memory across experiences.', category: 'Experimental', status: 'EXPERIMENTAL', defaultAction: 'Cluster Memory Patterns' },
+  { id: 'multiverse', name: 'Multiverse AI', glyph: 'git-network-outline', description: 'Generate multiple possible futures from one situation (Monte Carlo).', category: 'Core' },
+  { id: 'cognitive_memory', name: 'Self Intelligence', glyph: 'person-outline', description: 'Personal knowledge graph, memory, habits, goals, and preferences.', category: 'Core' },
+  { id: 'multi_agent', name: 'Decision Intelligence', glyph: 'git-branch-outline', description: 'Compare choices, scenarios, opportunity costs, and uncertainty.', category: 'Core' },
+  { id: 'world_model', name: 'Future Intelligence', glyph: 'telescope-outline', description: 'Simulate career, financial, and learning trajectories.', category: 'Core' },
+  { id: 'generative', name: 'Creative Intelligence', glyph: 'color-wand-outline', description: 'Generate unconventional ideas and challenge assumptions.', category: 'Core' },
+  { id: 'multimodal', name: 'Bio Intelligence', glyph: 'heart-outline', description: 'Wellness, sleep, activity, and sensor pattern insights.', category: 'Core' },
+  { id: 'predictive', name: 'Growth Intelligence', glyph: 'trending-up-outline', description: 'Learning paths, skill gaps, and adaptive recommendations.', category: 'Core' },
+  { id: 'quantum', name: 'Quantum Possibility Engine', glyph: 'infinite-outline', description: 'Distribution of possible outcomes via probabilistic simulation.', category: 'Experimental' },
+  { id: 'neuromorphic', name: 'Event-Driven Intelligence', glyph: 'pulse-outline', description: 'Event-driven sensing and spiking-pattern experiments.', category: 'Experimental' },
 ];
 
 const lifeGroups: { title: string; description: string; ids: ModuleId[] }[] = [
@@ -52,158 +51,131 @@ const lifeGroups: { title: string; description: string; ids: ModuleId[] }[] = [
   { title: 'Growth and access', description: 'Connecting understanding to continuous learning.', ids: ['learning', 'accessibility'] },
 ];
 
-interface Props {
+/** Where each life module can be actually opened. Modules without a screen yet stay in-place. */
+const moduleRoutes: Partial<Record<ModuleId, Screen>> = {
+  assistant: 'Assistant',
+  twin: 'PersonalTwin',
+  visual: 'VisualIntelligence',
+  voice: 'Voice',
+  health: 'Health',
+  food: 'Food',
+  learning: 'Learning',
+  environment: 'Environment',
+  accessibility: 'Accessibility',
+  files: 'Files',
+};
+
+export interface ModulesScreenProps {
   visionReady: boolean;
-  onOpenAssistant: () => void;
-  onOpenTwin: () => void;
-  onOpenVisual: () => void;
-  onOpenHealth: () => void;
+  /** Live counts from the user's workspace, shown on each module card. */
+  stats: {
+    goals: number;
+    observations: number;
+    scenarios: number;
+    captures: number;
+    activityDays: number;
+  };
+  healthAllowed: boolean;
+  onOpen: (screen: Screen) => void;
   onOpenConnections: () => void;
   onOpenHelpSearch: () => void;
 }
 
-export function ModulesScreen(props: Props) {
+export function ModulesScreen(props: ModulesScreenProps) {
   const [activeTab, setActiveTab] = useState<'life' | 'intelligence'>('life');
   const [selectedLifeId, setSelectedLifeId] = useState<ModuleId | null>(null);
   const [selectedIntelId, setSelectedIntelId] = useState<IntelligenceId | null>(null);
 
-  // Workbench state
   const [running, setRunning] = useState(false);
-  const [runResult, setRunResult] = useState<{
-    title: string;
-    confidence: number;
-    insights: string[];
-    recommendations: string[];
-  } | null>(null);
+  const [runResult, setRunResult] = useState<{ title: string; confidence: number; insights: string[]; recommendations: string[] } | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
 
   const selectedLifeModule = moduleDefinitions.find((m) => m.id === selectedLifeId);
   const selectedIntelModule = intelligenceDefinitions.find((m) => m.id === selectedIntelId);
 
-  async function executeModuleWorkbench(name: string, moduleId: string) {
-    setRunning(true);
-    setRunError(null);
-    setRunResult(null);
+  /** Per-module live stat line, derived from the shared workspace snapshot. */
+  const moduleStats = useMemo<Partial<Record<ModuleId, { value: string; sub: string }>>>(() => ({
+    twin: { value: `${props.stats.observations} signals`, sub: props.stats.scenarios > 0 ? `${props.stats.scenarios} scenario${props.stats.scenarios === 1 ? '' : 's'} saved` : 'No scenarios yet' },
+    health: { value: props.healthAllowed ? `${props.stats.activityDays} day${props.stats.activityDays === 1 ? '' : 's'}` : 'Paused', sub: props.healthAllowed ? 'of synced activity' : 'Enable access in Privacy' },
+    visual: { value: `${props.stats.captures} captures`, sub: 'Scenes, objects & documents' },
+    assistant: { value: props.visionReady ? 'Ready' : 'Not configured', sub: 'Ask, compare, plan' },
+    learning: { value: `${props.stats.goals} goal${props.stats.goals === 1 ? '' : 's'}`, sub: 'Skills & progress tracking' },
+    food: { value: 'Log meals', sub: 'Nutrition estimates & patterns' },
+  }), [props.stats, props.healthAllowed, props.visionReady]);
 
+  function resetWorkbench() {
+    setRunResult(null);
+    setRunError(null);
+  }
+
+  async function executeWorkbench(name: string, moduleId: string) {
+    setRunning(true);
+    resetWorkbench();
     try {
-      // Execute through Cloudflare Worker -> Python Intelligence backend
       const res = await runModuleRemote(moduleId, { trigger: 'mobile_workbench', timestamp: new Date().toISOString() });
+      const resultNote = typeof (res.result as { note?: unknown } | undefined)?.note === 'string'
+        ? 'The intelligence backend did not return data for this module. Check that the Python backend is deployed and reachable.'
+        : null;
       setRunResult({
-        title: `${name} Analysis Complete`,
-        confidence: res.confidence || 0.85,
-        insights: [
-          `Execution time: ${res.execution_time_ms ?? 12}ms across edge intelligence graph.`,
-          `Status: Verified ${res.related_modules?.length ?? 3} interconnected context signals.`
+        title: `${name} result`,
+        confidence: res.confidence || 0.5,
+        insights: resultNote ? [resultNote] : [
+          `Completed in ${res.execution_time_ms ?? 0} ms.`,
+          `Related modules: ${res.related_modules?.length ? res.related_modules.join(', ') : 'none reported'}.`,
         ],
-        recommendations: res.recommendations?.length
-          ? res.recommendations
-          : ['Maintain consistent daily check-ins to increase model precision.']
+        recommendations: res.recommendations?.length ? res.recommendations : [],
       });
     } catch {
-      // Graceful rich simulation if offline or developing locally
-      await new Promise((r) => setTimeout(r, 600));
-      setRunResult({
-        title: `${name} Local Evaluation`,
-        confidence: 0.82,
-        insights: [
-          `Analyzed signal streams: active context validated.`,
-          `Confidence rating calibrated against baseline historical patterns.`
-        ],
-        recommendations: [
-          'Review output recommendations against current goals.',
-          'Connect device sensors to enable continuous edge learning.'
-        ]
-      });
+      setRunError('Could not reach the intelligence backend. Run this again once the service is connected.');
     } finally {
       setRunning(false);
     }
   }
 
-  // Render Life Module Detail View
+  function openLifeModule(module: ModuleDefinition) {
+    const route = moduleRoutes[module.id];
+    if (route) props.onOpen(route);
+    else { setSelectedLifeId(module.id); resetWorkbench(); }
+  }
+
+  // ── Life module detail ──
   if (selectedLifeModule) {
     const links = relatedModules(selectedLifeModule);
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Pressable accessibilityRole="button" onPress={() => { setSelectedLifeId(null); setRunResult(null); }} style={styles.back}>
-          <Text style={styles.backText}>‹  All Life Modules</Text>
-        </Pressable>
+        <BackLink label="All Life Modules" onPress={() => { setSelectedLifeId(null); resetWorkbench(); }} />
 
         <View style={styles.detailHero}>
           <View style={styles.detailIcon}>
             <Ionicons name={moduleGlyphs[selectedLifeModule.id]} size={26} color="#73f5a8" />
           </View>
-          <Text style={styles.detailStatus}>READY</Text>
+          <Text style={styles.detailStatus}>{selectedLifeModule.status}</Text>
           <Text style={styles.title}>{selectedLifeModule.name}</Text>
           <Text style={styles.subtitle}>{selectedLifeModule.description}</Text>
         </View>
 
-        {/* Interactive Workbench */}
         <View style={styles.workbenchCard}>
-          <Text style={styles.workbenchEyebrow}>INTERACTIVE WORKBENCH</Text>
-          <Text style={styles.workbenchTitle}>Test & Run Module Intelligence</Text>
+          <Text style={styles.workbenchEyebrow}>INTELLIGENCE WORKBENCH</Text>
+          <Text style={styles.workbenchTitle}>Run against your saved context</Text>
           <Text style={styles.workbenchBody}>
-            Execute this module against your saved personal context to evaluate signals and generate real-time recommendations.
+            Executes this module on the intelligence backend using the signals already in your LIFEOS workspace.
           </Text>
 
           <Pressable
             accessibilityRole="button"
             disabled={running}
-            onPress={() => executeModuleWorkbench(selectedLifeModule.name, selectedLifeModule.id)}
+            onPress={() => void executeWorkbench(selectedLifeModule.name, selectedLifeModule.id)}
             style={[styles.primaryButton, running && styles.buttonDisabled]}
           >
-            {running ? (
-              <ActivityIndicator color="#07150b" size="small" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Run {selectedLifeModule.name} Intelligence  ⚡</Text>
-            )}
+            {running
+              ? <ActivityIndicator color="#07150b" size="small" />
+              : <Text style={styles.primaryButtonText}>Run {selectedLifeModule.name}  ⚡</Text>}
           </Pressable>
 
           {runError && <Text style={styles.errorText}>{runError}</Text>}
-
-          {runResult && (
-            <View style={styles.resultBox}>
-              <View style={styles.resultHeader}>
-                <Text style={styles.resultTitle}>{runResult.title}</Text>
-                <Text style={styles.confidenceBadge}>{Math.round(runResult.confidence * 100)}% Confidence</Text>
-              </View>
-              {runResult.insights.map((ins, i) => (
-                <Text key={i} style={styles.insightItem}>• {ins}</Text>
-              ))}
-              <Text style={styles.recHeader}>RECOMMENDED ACTIONS</Text>
-              {runResult.recommendations.map((rec, i) => (
-                <View key={i} style={styles.recItem}>
-                  <Text style={styles.recArrow}>→</Text>
-                  <Text style={styles.recText}>{rec}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          {runResult && <RunResult result={runResult} recLabel="RECOMMENDED ACTIONS" />}
         </View>
 
-        {/* Dedicated Screen Shortcuts */}
-        {selectedLifeModule.id === 'visual' && (
-          <Pressable accessibilityRole="button" onPress={props.onOpenVisual} style={styles.navShortcutButton}>
-            <Text style={styles.navShortcutText}>Open Full Visual Intelligence Camera  ↗</Text>
-          </Pressable>
-        )}
-        {selectedLifeModule.id === 'assistant' && (
-          <Pressable accessibilityRole="button" onPress={props.onOpenAssistant} style={styles.navShortcutButton}>
-            <Text style={styles.navShortcutText}>Open Conversational Assistant  ↗</Text>
-          </Pressable>
-        )}
-        {selectedLifeModule.id === 'health' && (
-          <Pressable accessibilityRole="button" onPress={props.onOpenHealth} style={styles.navShortcutButton}>
-            <Text style={styles.navShortcutText}>Open Device Activity Tracker  ↗</Text>
-          </Pressable>
-        )}
-        {selectedLifeModule.id === 'twin' && (
-          <Pressable accessibilityRole="button" onPress={props.onOpenTwin} style={styles.navShortcutButton}>
-            <Text style={styles.navShortcutText}>Open Personal Twin Modeling  ↗</Text>
-          </Pressable>
-        )}
-
-        <Text style={styles.sectionEyebrow}>HOW IT CONNECTS</Text>
-        <Text style={styles.sectionTitle}>Shared Context Signals</Text>
         <View style={styles.signalMap}>
           <Text style={styles.signalMapLabel}>CONTEXT THIS MODULE READS</Text>
           <View style={styles.signalCloud}>
@@ -219,18 +191,19 @@ export function ModulesScreen(props: Props) {
           </View>
         </View>
 
+        <Text style={styles.sectionTitle}>Connected modules</Text>
         <View style={styles.connectionList}>
           {links.map((item) => (
-            <View key={item.id} style={styles.connectionCard}>
+            <Pressable key={item.id} accessibilityRole="button" onPress={() => openLifeModule(item)} style={styles.connectionCard}>
               <View style={styles.connectionIcon}>
                 <Ionicons name={moduleGlyphs[item.id]} size={17} color="#65e99a" />
               </View>
               <View style={styles.connectionCopy}>
                 <Text style={styles.connectionName}>{item.name}</Text>
-                <Text style={styles.connectionStatus}>shares matching signals</Text>
+                <Text style={styles.connectionStatus}>{item.status === 'READY' ? 'ready · shares signals' : 'planned · shares signals'}</Text>
               </View>
-              <Text style={styles.connectionDot}>↔</Text>
-            </View>
+              <Ionicons name="chevron-forward-outline" size={14} color="#61e894" />
+            </Pressable>
           ))}
         </View>
 
@@ -241,109 +214,68 @@ export function ModulesScreen(props: Props) {
     );
   }
 
-  // Render Intelligence Engine Detail View
+  // ── Intelligence engine detail ──
   if (selectedIntelModule) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Pressable accessibilityRole="button" onPress={() => { setSelectedIntelId(null); setRunResult(null); }} style={styles.back}>
-          <Text style={styles.backText}>‹  All Intelligence Engines</Text>
-        </Pressable>
+        <BackLink label="All Intelligence Engines" onPress={() => { setSelectedIntelId(null); resetWorkbench(); }} />
 
         <View style={styles.detailHero}>
           <View style={styles.detailIcon}>
             <Ionicons name={selectedIntelModule.glyph} size={26} color="#73f5a8" />
           </View>
-          <Text style={styles.detailStatus}>{selectedIntelModule.status} ENGINE</Text>
+          <Text style={[styles.detailStatus, selectedIntelModule.category === 'Experimental' && styles.detailStatusExperimental]}>
+            {selectedIntelModule.category.toUpperCase()} ENGINE
+          </Text>
           <Text style={styles.title}>{selectedIntelModule.name}</Text>
           <Text style={styles.subtitle}>{selectedIntelModule.description}</Text>
         </View>
 
         <View style={styles.workbenchCard}>
           <Text style={styles.workbenchEyebrow}>INTELLIGENCE WORKBENCH</Text>
-          <Text style={styles.workbenchTitle}>{selectedIntelModule.defaultAction}</Text>
           <Text style={styles.workbenchBody}>
-            Dispatches request to Cloudflare Workers AI edge models and synthesizes multi-modal personal patterns.
+            Dispatches to the LIFEOS intelligence backend and returns the analysis of your saved context.
           </Text>
 
           <Pressable
             accessibilityRole="button"
             disabled={running}
-            onPress={() => executeModuleWorkbench(selectedIntelModule.name, selectedIntelModule.id)}
+            onPress={() => void executeWorkbench(selectedIntelModule.name, selectedIntelModule.id)}
             style={[styles.primaryButton, running && styles.buttonDisabled]}
           >
-            {running ? (
-              <ActivityIndicator color="#07150b" size="small" />
-            ) : (
-              <Text style={styles.primaryButtonText}>{selectedIntelModule.defaultAction}  ⚡</Text>
-            )}
+            {running
+              ? <ActivityIndicator color="#07150b" size="small" />
+              : <Text style={styles.primaryButtonText}>Run {selectedIntelModule.name}  ⚡</Text>}
           </Pressable>
 
-          {runResult && (
-            <View style={styles.resultBox}>
-              <View style={styles.resultHeader}>
-                <Text style={styles.resultTitle}>{runResult.title}</Text>
-                <Text style={styles.confidenceBadge}>{Math.round(runResult.confidence * 100)}% Confidence</Text>
-              </View>
-              {runResult.insights.map((ins, i) => (
-                <Text key={i} style={styles.insightItem}>• {ins}</Text>
-              ))}
-              <Text style={styles.recHeader}>SYNTHESIZED RECOMMENDATIONS</Text>
-              {runResult.recommendations.map((rec, i) => (
-                <View key={i} style={styles.recItem}>
-                  <Text style={styles.recArrow}>→</Text>
-                  <Text style={styles.recText}>{rec}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          {runError && <Text style={styles.errorText}>{runError}</Text>}
+          {runResult && <RunResult result={runResult} recLabel="SYNTHESIZED RECOMMENDATIONS" />}
         </View>
       </ScrollView>
     );
   }
 
-  // Main Modules List View with Segmented Control
+  // ── Main list ──
+  const readyCount = moduleDefinitions.filter((m) => m.status === 'READY').length;
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.intro}>
         <Text style={styles.eyebrow}>LIFEOS ECOSYSTEM</Text>
         <Text style={styles.title}>All Modules & Engines</Text>
         <Text style={styles.subtitle}>
-          10 life context modules connected to 10 edge intelligence engines. Everything is active and executable.
+          {readyCount} ready life modules connected to {intelligenceDefinitions.length} intelligence engines. Tap any card to open it.
         </Text>
         <View style={styles.statsRow}>
-          <View style={styles.statChip}><Text style={styles.statValue}>20</Text><Text style={styles.statLabel}>Modules</Text></View>
-          <View style={styles.statChip}><Text style={styles.statValue}>10</Text><Text style={styles.statLabel}>Engines</Text></View>
+          <View style={styles.statChip}><Text style={styles.statValue}>{moduleDefinitions.length}</Text><Text style={styles.statLabel}>Modules</Text></View>
+          <View style={styles.statChip}><Text style={styles.statValue}>{intelligenceDefinitions.length}</Text><Text style={styles.statLabel}>Engines</Text></View>
         </View>
       </View>
 
-      {/* Segmented Control */}
       <View style={styles.segmentContainer}>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === 'life' }}
-          onPress={() => setActiveTab('life')}
-          style={[styles.segmentButton, activeTab === 'life' && styles.segmentActive]}
-        >
-          <Ionicons name="apps-outline" size={15} color={activeTab === 'life' ? '#07150b' : '#9cad9f'} />
-          <Text style={[styles.segmentText, activeTab === 'life' && styles.segmentTextActive]}>
-            Life Modules (10)
-          </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === 'intelligence' }}
-          onPress={() => setActiveTab('intelligence')}
-          style={[styles.segmentButton, activeTab === 'intelligence' && styles.segmentActive]}
-        >
-          <Ionicons name="hardware-chip-outline" size={15} color={activeTab === 'intelligence' ? '#07150b' : '#9cad9f'} />
-          <Text style={[styles.segmentText, activeTab === 'intelligence' && styles.segmentTextActive]}>
-            AI Engines (10)
-          </Text>
-        </Pressable>
+        <Segment active={activeTab === 'life'} label="Life Modules" count={moduleDefinitions.length} icon="apps-outline" onPress={() => setActiveTab('life')} />
+        <Segment active={activeTab === 'intelligence'} label="AI Engines" count={intelligenceDefinitions.length} icon="hardware-chip-outline" onPress={() => setActiveTab('intelligence')} />
       </View>
 
-      {/* Quick Banners */}
       <Pressable accessibilityRole="button" onPress={props.onOpenConnections} style={styles.connectionsBanner}>
         <Ionicons name="git-branch-outline" size={21} color="#72df98" />
         <View style={styles.connectionsCopy}>
@@ -353,63 +285,65 @@ export function ModulesScreen(props: Props) {
         <Text style={styles.flowArrow}>›</Text>
       </Pressable>
 
-      {/* Tab 1: Life Context Modules */}
-      {activeTab === 'life' && (
-        <View>
-          {lifeGroups.map((group) => (
-            <View key={group.title} style={styles.group}>
-              <View style={styles.groupHeading}>
-                <Text style={styles.sectionTitle}>{group.title}</Text>
-                <Text style={styles.groupDescription}>{group.description}</Text>
-              </View>
-              <View style={styles.moduleGrid}>
-                {group.ids.map((id) => {
-                  const item = moduleDefinitions.find((candidate) => candidate.id === id)!;
-                  return (
-                    <Pressable
-                      key={id}
-                      accessibilityRole="button"
-                      onPress={() => setSelectedLifeId(id)}
-                      style={styles.moduleCard}
-                    >
-                      <View style={styles.moduleTopline}>
-                        <View style={styles.moduleIcon}>
-                          <Ionicons name={moduleGlyphs[item.id]} size={18} color="#65e99a" />
-                        </View>
-                        <Text style={[styles.moduleStatus, styles.statusReady]}>READY</Text>
-                      </View>
-                      <Text style={styles.moduleName}>{item.name}</Text>
-                      <Text style={styles.moduleDescription}>{item.description}</Text>
-                      <Text style={styles.moduleConnections}>↔ {relatedModules(item).length} linked signals</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ))}
+      {activeTab === 'life' && lifeGroups.map((group) => (
+        <View key={group.title} style={styles.group}>
+          <View style={styles.groupHeading}>
+            <Text style={styles.sectionTitle}>{group.title}</Text>
+            <Text style={styles.groupDescription}>{group.description}</Text>
+          </View>
+          <View style={styles.moduleGrid}>
+            {group.ids.map((id) => {
+              const item = moduleDefinitions.find((candidate) => candidate.id === id);
+              if (!item) return null;
+              const live = moduleStats[item.id];
+              const ready = item.status === 'READY';
+              return (
+                <Pressable
+                  key={id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.name}, ${ready ? 'ready' : 'planned'}`}
+                  onPress={() => openLifeModule(item)}
+                  style={styles.moduleCard}
+                >
+                  <View style={styles.moduleTopline}>
+                    <View style={styles.moduleIcon}>
+                      <Ionicons name={moduleGlyphs[item.id]} size={18} color={ready ? '#65e99a' : '#7c9683'} />
+                    </View>
+                    <Text style={[styles.moduleStatus, ready ? styles.statusReady : styles.statusPlanned]}>
+                      {ready ? 'READY' : 'PLANNED'}
+                    </Text>
+                  </View>
+                  <Text style={styles.moduleName}>{item.name}</Text>
+                  <Text style={[styles.moduleDescription, !ready && styles.moduleDescriptionPlanned]}>{live?.sub ?? item.description}</Text>
+                  {live && <Text style={styles.moduleLiveValue}>{live.value}</Text>}
+                  <Text style={styles.moduleConnections}>
+                    {ready ? (moduleRoutes[item.id] ? 'Open  ›' : `↔ ${relatedModules(item).length} linked`) : 'Coming soon'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
-      )}
+      ))}
 
-      {/* Tab 2: Intelligence Engines */}
       {activeTab === 'intelligence' && (
         <View style={styles.intelGrid}>
           {intelligenceDefinitions.map((engine) => (
             <Pressable
-              key={`${engine.id}-${engine.name}`}
+              key={engine.id}
               accessibilityRole="button"
-              onPress={() => setSelectedIntelId(engine.id)}
+              onPress={() => { setSelectedIntelId(engine.id); resetWorkbench(); }}
               style={styles.intelCard}
             >
               <View style={styles.moduleTopline}>
                 <View style={styles.intelIcon}>
                   <Ionicons name={engine.glyph} size={19} color="#73f5a8" />
                 </View>
-                <Text style={[styles.moduleStatus, engine.status === 'READY' ? styles.statusReady : styles.statusExperimental]}>
-                  {engine.status}
+                <Text style={[styles.moduleStatus, engine.category === 'Core' ? styles.statusReady : styles.statusExperimental]}>
+                  {engine.category.toUpperCase()}
                 </Text>
               </View>
               <Text style={styles.moduleName}>{engine.name}</Text>
-              <Text style={styles.intelCategory}>{engine.category}</Text>
               <Text style={styles.moduleDescription}>{engine.description}</Text>
               <View style={styles.intelCardFooter}>
                 <Text style={styles.intelActionText}>Open Workbench  ›</Text>
@@ -419,6 +353,49 @@ export function ModulesScreen(props: Props) {
         </View>
       )}
     </ScrollView>
+  );
+}
+
+function BackLink({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.back}>
+      <Text style={styles.backText}>‹  {label}</Text>
+    </Pressable>
+  );
+}
+
+function Segment({ active, label, count, icon, onPress }: { active: boolean; label: string; count: number; icon: keyof typeof Ionicons.glyphMap; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={[styles.segmentButton, active && styles.segmentActive]}
+    >
+      <Ionicons name={icon} size={15} color={active ? '#07150b' : '#9cad9f'} />
+      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label} ({count})</Text>
+    </Pressable>
+  );
+}
+
+function RunResult({ result, recLabel }: { result: { title: string; confidence: number; insights: string[]; recommendations: string[] }; recLabel: string }) {
+  return (
+    <View style={styles.resultBox}>
+      <View style={styles.resultHeader}>
+        <Text style={styles.resultTitle}>{result.title}</Text>
+        <Text style={styles.confidenceBadge}>{Math.round(result.confidence * 100)}% Confidence</Text>
+      </View>
+      {result.insights.map((insight, index) => <Text key={index} style={styles.insightItem}>• {insight}</Text>)}
+      {result.recommendations.length > 0 && <>
+        <Text style={styles.recHeader}>{recLabel}</Text>
+        {result.recommendations.map((rec, index) => (
+          <View key={index} style={styles.recItem}>
+            <Text style={styles.recArrow}>→</Text>
+            <Text style={styles.recText}>{rec}</Text>
+          </View>
+        ))}
+      </>}
+    </View>
   );
 }
 
@@ -454,17 +431,19 @@ const styles = StyleSheet.create({
   moduleCard: { width: '48%', minWidth: 145, flexGrow: 1, minHeight: 160, padding: 13, borderRadius: 16, borderWidth: 1, borderColor: '#1d3927', backgroundColor: '#0c1910' },
   moduleTopline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 11 },
   moduleIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#153b24', alignItems: 'center', justifyContent: 'center' },
-  moduleStatus: { fontSize: 8, fontWeight: '700', letterSpacing: 0.6, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4 },
+  moduleStatus: { fontSize: 8, fontWeight: '700', letterSpacing: 0.6, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4, overflow: 'hidden' },
   statusReady: { color: '#8ee9aa', backgroundColor: '#153b26' },
+  statusPlanned: { color: '#9cad9f', backgroundColor: '#17231b' },
   statusExperimental: { color: '#e6c979', backgroundColor: '#302817' },
   moduleName: { color: '#eaf4ec', fontSize: 13, lineHeight: 18, fontWeight: '600', marginBottom: 4 },
   moduleDescription: { flex: 1, color: '#8fa594', fontSize: 10, lineHeight: 15 },
+  moduleDescriptionPlanned: { color: '#687b6d' },
+  moduleLiveValue: { color: '#73f5a8', fontSize: 12, lineHeight: 17, fontWeight: '700', marginTop: 8 },
   moduleConnections: { color: '#68cb89', fontSize: 9, lineHeight: 14, fontWeight: '600', marginTop: 10 },
 
   intelGrid: { gap: 12 },
   intelCard: { padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#203d2b', backgroundColor: '#0d1b12' },
   intelIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#153b24', alignItems: 'center', justifyContent: 'center' },
-  intelCategory: { color: '#68cb89', fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
   intelCardFooter: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#172e20', alignItems: 'flex-end' },
   intelActionText: { color: '#73f5a8', fontSize: 11, fontWeight: '700' },
 
@@ -473,7 +452,7 @@ const styles = StyleSheet.create({
   detailHero: { alignItems: 'flex-start', padding: 17, borderRadius: 20, backgroundColor: '#0d1b12', borderWidth: 1, borderColor: '#244a32', marginBottom: 18 },
   detailIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#153b24', marginBottom: 12 },
   detailStatus: { color: '#8ee9aa', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
-  sectionEyebrow: { color: '#68cb89', fontSize: 9, letterSpacing: 1.2, fontWeight: '700', marginBottom: 6, marginTop: 16 },
+  detailStatusExperimental: { color: '#e6c979' },
 
   workbenchCard: { padding: 16, borderRadius: 18, backgroundColor: '#102418', borderWidth: 1, borderColor: '#2c6742', marginBottom: 14 },
   workbenchEyebrow: { color: '#73f5a8', fontSize: 9, fontWeight: '700', letterSpacing: 1.1, marginBottom: 4 },
@@ -494,9 +473,6 @@ const styles = StyleSheet.create({
   recArrow: { color: '#61e894', fontSize: 12 },
   recText: { color: '#dcebe0', fontSize: 11, flex: 1, lineHeight: 16 },
 
-  navShortcutButton: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: '#35774d', backgroundColor: '#132c1d', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-  navShortcutText: { color: '#84f6b0', fontSize: 12, fontWeight: '700' },
-
   signalMap: { borderRadius: 15, backgroundColor: '#09150d', borderColor: '#1d3927', borderWidth: 1, padding: 12, marginTop: 10, marginBottom: 14 },
   signalMapLabel: { color: '#68cb89', fontSize: 8, lineHeight: 12, letterSpacing: 0.9, fontWeight: '700', marginBottom: 8 },
   producesLabel: { marginTop: 12 },
@@ -504,13 +480,12 @@ const styles = StyleSheet.create({
   signalChip: { color: '#b8cbbd', fontSize: 9, lineHeight: 13, backgroundColor: '#17251a', borderRadius: 10, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 5 },
   signalOutput: { color: '#a3efb8', backgroundColor: '#153b26' },
 
-  connectionList: { gap: 8, marginTop: 10, marginBottom: 14 },
+  connectionList: { gap: 8, marginTop: 4, marginBottom: 14 },
   connectionCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11, backgroundColor: '#0c1910', borderRadius: 13, borderWidth: 1, borderColor: '#1d3927' },
   connectionIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#153b24' },
   connectionCopy: { flex: 1 },
   connectionName: { color: '#dcebe0', fontSize: 12, lineHeight: 17, fontWeight: '600' },
   connectionStatus: { color: '#829687', fontSize: 8, lineHeight: 12, marginTop: 2 },
-  connectionDot: { color: '#61e894', fontSize: 15 },
   secondaryButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderColor: '#294333', borderWidth: 1, marginBottom: 12 },
   secondaryButtonText: { color: '#71df98', fontSize: 11, fontWeight: '600' },
 });
