@@ -115,7 +115,7 @@ describe('API Client', () => {
     it('should make GET request', async () => {
       const mockResponse = new Response(JSON.stringify({ data: 'test' }), {
         status: 200,
-        ok: true,
+        
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -135,7 +135,7 @@ describe('API Client', () => {
     it('should make POST request', async () => {
       const mockResponse = new Response(JSON.stringify({ created: true }), {
         status: 201,
-        ok: true,
+        
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -158,7 +158,7 @@ describe('API Client', () => {
     it('should make PUT request', async () => {
       const mockResponse = new Response(JSON.stringify({ updated: true }), {
         status: 200,
-        ok: true,
+        
       });
 
       (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
@@ -180,7 +180,7 @@ describe('API Client', () => {
     it('should make PATCH request', async () => {
       const mockResponse = new Response(JSON.stringify({ updated: true }), {
         status: 200,
-        ok: true,
+        
       });
 
       (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
@@ -202,7 +202,7 @@ describe('API Client', () => {
     it('should make DELETE request', async () => {
       const mockResponse = new Response(JSON.stringify({ deleted: true }), {
         status: 200,
-        ok: true,
+        
       });
 
       (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
@@ -221,7 +221,7 @@ describe('API Client', () => {
     it('should include auth token in requests', async () => {
       const mockResponse = new Response(JSON.stringify({ data: 'test' }), {
         status: 200,
-        ok: true,
+        
       });
 
       (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
@@ -244,7 +244,7 @@ describe('API Client', () => {
     it('should handle successful response', async () => {
       const mockResponse = new Response(JSON.stringify({ data: 'test' }), {
         status: 200,
-        ok: true,
+        
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -260,7 +260,7 @@ describe('API Client', () => {
     it('should handle 404 response', async () => {
       const mockResponse = new Response(JSON.stringify({ error: 'Not found' }), {
         status: 404,
-        ok: false,
+        
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -274,7 +274,7 @@ describe('API Client', () => {
     it('should handle 500 response', async () => {
       const mockResponse = new Response(JSON.stringify({ error: 'Server error' }), {
         status: 500,
-        ok: false,
+        
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -296,7 +296,7 @@ describe('API Client', () => {
     it('should call onRequest callback', async () => {
       const mockResponse = new Response(JSON.stringify({ data: 'test' }), {
         status: 200,
-        ok: true,
+        
       });
 
       (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
@@ -318,7 +318,7 @@ describe('API Client', () => {
     it('should call onResponse callback', async () => {
       const mockResponse = new Response(JSON.stringify({ data: 'test' }), {
         status: 200,
-        ok: true,
+        
       });
 
       (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
@@ -358,7 +358,7 @@ describe('API Client', () => {
     it('should make raw request with query params', async () => {
       const mockResponse = new Response(JSON.stringify({ data: 'test' }), {
         status: 200,
-        ok: true,
+        
       });
 
       (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
@@ -376,7 +376,7 @@ describe('API Client', () => {
     it('should make request with custom headers', async () => {
       const mockResponse = new Response(JSON.stringify({ data: 'test' }), {
         status: 200,
-        ok: true,
+        
       });
 
       (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
@@ -512,9 +512,9 @@ describe('API Client', () => {
       let callCount = 0;
       
       const mockResponses = [
-        new Response(JSON.stringify({ error: 'Failure' }), { status: 500, ok: false }),
-        new Response(JSON.stringify({ error: 'Failure' }), { status: 500, ok: false }),
-        new Response(JSON.stringify({ data: 'success' }), { status: 200, ok: true }),
+        new Response(JSON.stringify({ error: 'Failure' }), { status: 500 }),
+        new Response(JSON.stringify({ error: 'Failure' }), { status: 500 }),
+        new Response(JSON.stringify({ data: 'success' }), { status: 200 }),
       ];
 
       (global.fetch as jest.Mock).mockImplementation(() => {
@@ -536,7 +536,7 @@ describe('API Client', () => {
     it('should pass arguments correctly', async () => {
       const mockResponse = new Response(JSON.stringify({ data: 'test' }), {
         status: 200,
-        ok: true,
+        
       });
 
       (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
@@ -563,7 +563,7 @@ describe('API Client', () => {
       (global.fetch as jest.Mock).mockResolvedValue(
         new Response(JSON.stringify({ token: 'test-token', user: { id: 1 } }), {
           status: 200,
-          ok: true,
+          
         })
       );
     });
@@ -612,7 +612,7 @@ describe('API Client', () => {
       (global.fetch as jest.Mock).mockResolvedValue(
         new Response(JSON.stringify({ goals: [], total: 0, page: 1, limit: 10, hasMore: false }), {
           status: 200,
-          ok: true,
+          
         })
       );
     });
@@ -632,7 +632,7 @@ describe('API Client', () => {
       (global.fetch as jest.Mock).mockResolvedValue(
         new Response(JSON.stringify({ id: '1', title: 'Test Goal' }), {
           status: 200,
-          ok: true,
+          
         })
       );
 
@@ -650,7 +650,7 @@ describe('API Client', () => {
       (global.fetch as jest.Mock).mockResolvedValue(
         new Response(JSON.stringify({ id: '1', title: 'New Goal' }), {
           status: 201,
-          ok: true,
+          
         })
       );
 
@@ -671,7 +671,7 @@ describe('API Client', () => {
       (global.fetch as jest.Mock).mockResolvedValue(
         new Response(JSON.stringify({ id: '1', title: 'Updated Goal' }), {
           status: 200,
-          ok: true,
+          
         })
       );
 
@@ -692,7 +692,7 @@ describe('API Client', () => {
       (global.fetch as jest.Mock).mockResolvedValue(
         new Response(JSON.stringify({ id: '1', title: 'Deleted Goal' }), {
           status: 200,
-          ok: true,
+          
         })
       );
 
@@ -716,7 +716,7 @@ describe('API Client', () => {
           timestamp: new Date().toISOString(),
         }), {
           status: 200,
-          ok: true,
+          
         })
       );
     });
@@ -752,7 +752,7 @@ describe('API Client', () => {
       (global.fetch as jest.Mock).mockResolvedValue(
         new Response(JSON.stringify({ status: 'ok' }), {
           status: 200,
-          ok: true,
+          
         })
       );
 
