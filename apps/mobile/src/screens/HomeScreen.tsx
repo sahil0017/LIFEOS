@@ -412,7 +412,6 @@ export function HomeScreen(props: HomeScreenProps) {
       {/* ── Module Insight Grid ── */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionEyebrow}>ALL MODULES</Text>
-        <Text style={styles.sectionTitle}>Live module status</Text>
         <Pressable accessibilityRole="button" onPress={props.onOpenModules}>
           <Text style={styles.seeAll}>See all  ↗</Text>
         </Pressable>
@@ -522,7 +521,7 @@ const styles = StyleSheet.create({
   pulseCellLabel: { color: '#829687', fontSize: 8, lineHeight: 12, letterSpacing: 0.5 },
 
   // Section header
-  sectionHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 11, flexWrap: 'wrap' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 11, flexWrap: 'wrap' },
   sectionEyebrow: { color: '#68cb89', fontSize: 9, letterSpacing: 1.2, fontWeight: '700', flexShrink: 0 },
   sectionTitle: { color: '#eaf4ec', fontSize: 17, fontWeight: '600', flex: 1 },
   seeAll: { color: '#66e89a', fontSize: 11, fontWeight: '600' },
