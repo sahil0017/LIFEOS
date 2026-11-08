@@ -44,7 +44,7 @@ export async function runIntelligenceModule(
           related_modules: payload.suggested_next_modules ?? payload.related_modules ?? []
         };
       }
-    } catch {}
+    } catch { }
   }
   // Fallback: report honestly that the backend is unavailable.
   const start = Date.now();
@@ -80,7 +80,7 @@ export interface ProblemSolutionVisualization {
     critical_assumptions: string[];
   };
   charts: {
-    state_trajectory?: Array<{ month: number; [metric: string]: number }>;
+    state_trajectory?: Array<{ month: number;[metric: string]: number }>;
     causal_discovery?: {
       root_causes: string[];
       confounders: string[];
@@ -444,10 +444,10 @@ export async function solveRealWorldProblem(
           constraint_audit: audits,
           superposition_probabilities: facts.scenarios.length
             ? (() => {
-                const weights = facts.scenarios.map((s) => Math.max(0, s.horizonMonths * (1 + Math.abs(s.weeklyHoursChange) / 20)));
-                const total = weights.reduce((sum, w) => sum + w, 0) || 1;
-                return facts.scenarios.map((s, i) => ({ scenario: s.title, probability: Math.round((weights[i] / total) * 100) / 100, phase: i + 1 }));
-              })()
+              const weights = facts.scenarios.map((s) => Math.max(0, s.horizonMonths * (1 + Math.abs(s.weeklyHoursChange) / 20)));
+              const total = weights.reduce((sum, w) => sum + w, 0) || 1;
+              return facts.scenarios.map((s, i) => ({ scenario: s.title, probability: Math.round((weights[i] / total) * 100) / 100, phase: i + 1 }));
+            })()
             : undefined,
         },
         actionable_experiments: [
