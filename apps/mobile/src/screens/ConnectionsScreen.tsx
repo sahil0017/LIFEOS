@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { contextTypes, moduleDefinitions } from '../context';
@@ -22,7 +22,9 @@ interface Props { onBack: () => void; onOpenHealth: () => void; }
 
 export function ConnectionsScreen({ onBack, onOpenHealth }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
-  const chosen = sources.find((source) => source.id === selected);
+  const chosen = useMemo(() => sources.find((source) => source.id === selected), [selected]);
+  const signalLabels = useMemo(() => new Map(contextTypes.map((item) => [item.id, item.label])), []);
+  const relatedModules = useMemo(() => chosen ? moduleDefinitions.filter((module) => module.reads.some((signal) => chosen.signals.includes(signal))) : [], [chosen]);
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
     <Pressable accessibilityRole="button" onPress={chosen ? () => setSelected(null) : onBack} style={styles.back}><Text style={styles.backText}>‹  {chosen ? 'All connections' : 'Modules'}</Text></Pressable>
     <Text style={styles.eyebrow}>PERSONAL CONTEXT · DATA CONNECTIONS</Text>
@@ -33,9 +35,9 @@ export function ConnectionsScreen({ onBack, onOpenHealth }: Props) {
       <View style={styles.sourceHero}><View style={styles.sourceIcon}><Ionicons name={sourceGlyphs[chosen.id]} size={19} color="#72df98" /></View><Text style={styles.status}>{chosen.status}</Text><Text style={styles.sourceNote}>{chosen.note}</Text></View>
       {chosen.id === 'device_steps' && <Pressable accessibilityRole="button" onPress={onOpenHealth} style={styles.connectButton}><Text style={styles.connectButtonText}>Open activity setup  ↗</Text></Pressable>}
       <Text style={styles.sectionTitle}>What it could add</Text>
-      <SignalFlow signals={chosen.signals} />
+      <SignalFlow signals={chosen.signals} labelMap={signalLabels} />
       <Text style={styles.sectionTitle}>Modules that can use these signals</Text>
-      <View style={styles.moduleList}>{moduleDefinitions.filter((module) => module.reads.some((signal) => chosen.signals.includes(signal))).map((module) => <View key={module.id} style={styles.moduleItem}><Text style={styles.moduleIcon}>{module.icon}</Text><Text style={styles.moduleName}>{module.name}</Text><Text style={styles.moduleArrow}>↗</Text></View>)}</View>
+      <View style={styles.moduleList}>{relatedModules.map((module) => <View key={module.id} style={styles.moduleItem}><Text style={styles.moduleIcon}>{module.icon}</Text><Text style={styles.moduleName}>{module.name}</Text><Text style={styles.moduleArrow}>↗</Text></View>)}</View>
     </> : <>
       <View style={styles.flowCard}>
         <Text style={styles.flowTitle}>ONE EVENT FLOW</Text>
@@ -43,13 +45,13 @@ export function ConnectionsScreen({ onBack, onOpenHealth }: Props) {
         <Text style={styles.flowNote}>A new connector defines which signal types it emits. Any module that reads those types becomes related automatically.</Text>
       </View>
       {['Google', 'Health', 'Food', 'Finance', 'Files'].map((group) => <View key={group} style={styles.group}><Text style={styles.groupTitle}>{group}</Text>{sources.filter((source) => source.group === group).map((source) => <Pressable key={source.id} accessibilityRole="button" onPress={() => setSelected(source.id)} style={styles.sourceCard}>
-        <View style={styles.sourceIcon}><Ionicons name={sourceGlyphs[source.id]} size={18} color="#72df98" /></View><View style={styles.sourceCopy}><Text style={styles.sourceTitle}>{source.title}</Text><Text style={styles.sourceDesc}>{source.description}</Text><Text style={styles.signalPreview}>{source.signals.map((signal) => contextTypes.find((item) => item.id === signal)?.label).join(' · ')}</Text></View><Text style={styles.sourceArrow}>›</Text>
+        <View style={styles.sourceIcon}><Ionicons name={sourceGlyphs[source.id]} size={18} color="#72df98" /></View><View style={styles.sourceCopy}><Text style={styles.sourceTitle}>{source.title}</Text><Text style={styles.sourceDesc}>{source.description}</Text><Text style={styles.signalPreview}>{source.signals.map((signal) => signalLabels.get(signal)).join(' · ')}</Text></View><Text style={styles.sourceArrow}>›</Text>
       </Pressable>)}</View>)}
     </>}
   </ScrollView>;
 }
 
-function SignalFlow({ signals }: { signals: SignalType[] }) { return <View style={styles.signalBox}><View style={styles.signalTags}>{signals.map((signal) => <Text key={signal} style={styles.signalTag}>{contextTypes.find((item) => item.id === signal)?.label}</Text>)}</View></View>; }
+function SignalFlow({ signals, labelMap }: { signals: SignalType[]; labelMap: Map<SignalType, string> }) { return <View style={styles.signalBox}><View style={styles.signalTags}>{signals.map((signal) => <Text key={signal} style={styles.signalTag}>{labelMap.get(signal)}</Text>)}</View></View>; }
 function FlowNode({ label }: { label: string }) { return <View style={styles.flowNode}><View style={styles.nodeIcon}><Text style={styles.nodeSpark}>✳</Text></View><Text style={styles.nodeLabel}>{label}</Text></View>; }
 
 const styles = StyleSheet.create({
