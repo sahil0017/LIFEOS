@@ -48,9 +48,11 @@ export interface ApiClientConfig {
 
 /**
  * Default API client configuration.
+ * Note: In React Native/Expo, process.env doesn't work at runtime.
+ * Use Constants.expoConfig?.extra?.API_URL or pass baseUrl in config.
  */
 const DEFAULT_CONFIG: ApiClientConfig = {
-  baseUrl: process.env.API_URL || 'https://api.lifeos.com',
+  baseUrl: 'https://api.lifeos.com',
   timeout: 30000,
   maxRetries: 3,
   retryDelay: 1000,
