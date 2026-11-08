@@ -98,7 +98,14 @@ function createTimeout(ms: number, controller: AbortController): Promise<never> 
  * Parse response based on content type.
  */
 async function parseResponse<T = unknown>(response: Response): Promise<T> {
-  const contentType = response.headers.get('content-type') || '';
+  const getHeader = (name: string) => {
+    if (typeof (response.headers as any)?.get === 'function') {
+      return (response.headers as any).get(name);
+    }
+    const headers = (response.headers as any) || {};
+    return headers[name] || headers[name.toLowerCase()] || headers[name.toUpperCase()];
+  };
+  const contentType = getHeader('content-type') || '';
   
   if (contentType.includes('application/json')) {
     return response.json() as Promise<T>;

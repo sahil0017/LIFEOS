@@ -52,12 +52,14 @@ export interface ApiClientConfig {
  * Use Constants.expoConfig?.extra?.API_URL or pass baseUrl in config.
  */
 const DEFAULT_CONFIG: ApiClientConfig = {
-  baseUrl: 'https://api.lifeos.com',
+  baseUrl: process.env.LIVE_API ? 'https://lifeos-intel-backend.fly.dev' : 'https://api.lifeos.com',
   timeout: 30000,
   maxRetries: 3,
   retryDelay: 1000,
   withAuth: false,
 };
+
+
 
 /**
  * API strategy types.
@@ -185,7 +187,7 @@ export class ApiClient {
         this.config.onRequest(url, options);
       }
 
-      const response = await this.strategy.execute(new Request(url, options));
+      const response = await this.strategy.execute(Object.assign(new Request(url, options), { url, ...options }));
 
       if (this.config.onResponse) {
         this.config.onResponse(response, url);
@@ -435,9 +437,9 @@ export class SingletonApiClient {
   private static config: Partial<ApiClientConfig> | null = null;
 
   static getInstance(config?: Partial<ApiClientConfig>): ApiClient {
-    if (this.instance === null || this.config !== config) {
+    if (this.instance === null || (config !== undefined && this.config !== config)) {
       this.instance = new ApiClient(config);
-      this.config = config || {};
+      this.config = config ?? null;
     }
     return this.instance;
   }
@@ -519,7 +521,9 @@ export class RetryApiClient extends ApiClient {
       } catch (error) {
         lastError = error;
         if (attempt < this.maxRetries && isRetryableError(error)) {
-          await new Promise((resolve) => setTimeout(resolve, this.delay * (attempt + 1)));
+          if (this.delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, this.delay * (attempt + 1)));
+          }
         } else {
           throw error;
         }

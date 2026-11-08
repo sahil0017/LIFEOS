@@ -27,168 +27,189 @@ export abstract class Decorator<T, R> implements Component<T, R> {
 }
 
 /**
- * Logging decorator that adds logging before and after execution.
+ * Function-based Logging decorator.
  */
-export class LoggingDecorator<T, R> extends Decorator<T, R> {
-  private logger: (message: string, data?: unknown) => void;
-
-  constructor(
-    component: Component<T, R>,
-    logger: (message: string, data?: unknown) => void = console.log,
-  ) {
-    super(component);
-    this.logger = logger;
-  }
-
-  async execute(data: T): Promise<R> {
-    this.logger('[LoggingDecorator] Starting execution', data);
-    const start = performance.now();
-
-    try {
-      const result = await this.component.execute(data);
-      const end = performance.now();
-      this.logger('[LoggingDecorator] Execution completed', {
-        duration: end - start,
-        result,
+export function LoggingDecorator<F extends (...args: any[]) => any>(
+  fn: F,
+  logger: (...args: any[]) => void = console.log,
+): F {
+  const decorated = function (this: any, ...args: Parameters<F>): any {
+    logger(`Calling function with args:`, args);
+    const result = fn.apply(this, args);
+    if (result && typeof result.then === 'function') {
+      return result.then((res: any) => {
+        logger(`Function resolved with:`, res);
+        return res;
       });
-      return result;
-    } catch (error) {
-      const end = performance.now();
-      this.logger('[LoggingDecorator] Execution failed', {
-        duration: end - start,
-        error,
-      });
-      throw error;
     }
-  }
+    logger(`Function returned:`, result);
+    return result;
+  };
+  Object.defineProperty(decorated, 'name', { value: fn.name || 'anonymous' });
+  return decorated as unknown as F;
 }
 
 /**
- * Retry decorator that adds retry logic.
+ * Function-based Retry decorator.
  */
-export class RetryDecorator<T, R> extends Decorator<T, R> {
-  private maxRetries: number;
-  private delay: number;
+export function RetryDecorator<F extends (...args: any[]) => any>(
+  fn: F,
+  options: { maxRetries?: number; delay?: number; isRetryable?: (error: any) => boolean } = {},
+): F {
+  const { maxRetries = 3, delay = 0, isRetryable = () => true } = options;
 
-  constructor(component: Component<T, R>, maxRetries: number = 3, delay: number = 1000) {
-    super(component);
-    this.maxRetries = maxRetries;
-    this.delay = delay;
-  }
-
-  async execute(data: T): Promise<R> {
+  return function (this: any, ...args: Parameters<F>): any {
     let attempts = 0;
-    let lastError: unknown;
-
-    while (attempts <= this.maxRetries) {
+    while (attempts <= maxRetries) {
       try {
-        return await this.component.execute(data);
-      } catch (error) {
-        lastError = error;
+        const res = fn.apply(this, args);
+        if (res && typeof res.then === 'function') {
+          return (async () => {
+            let lastErr: any;
+            try {
+              return await res;
+            } catch (err) {
+              lastErr = err;
+              if (attempts >= maxRetries || !isRetryable(err)) {
+                throw err;
+              }
+            }
+            for (let i = attempts + 1; i <= maxRetries; i++) {
+              if (delay > 0) {
+                await new Promise((r) => setTimeout(r, delay));
+              }
+              try {
+                return await fn.apply(this, args);
+              } catch (err) {
+                lastErr = err;
+                if (i >= maxRetries || !isRetryable(err)) {
+                  throw err;
+                }
+              }
+            }
+            throw lastErr;
+          })();
+        }
+        return res;
+      } catch (err) {
         attempts++;
-        if (attempts <= this.maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, this.delay));
+        if (attempts > maxRetries || !isRetryable(err)) {
+          throw err;
         }
       }
     }
-
-    throw lastError instanceof Error ? lastError : new Error(String(lastError));
-  }
+  } as unknown as F;
 }
 
 /**
- * Cache decorator that caches results.
+ * Function-based Cache decorator.
  */
-export class CacheDecorator<T, R> extends Decorator<T, R> {
-  private cache: Map<string, R> = new Map();
-  private keyExtractor: (data: T) => string;
+export function CacheDecorator<F extends (...args: any[]) => any>(
+  fn: F,
+  options: { ttl?: number; cacheErrors?: boolean } = {},
+): F {
+  const { ttl = 60000, cacheErrors = false } = options;
+  const cache = new Map<string, { value?: any; error?: any; hasError: boolean; expires: number }>();
 
-  constructor(component: Component<T, R>, keyExtractor: (data: T) => string = JSON.stringify) {
-    super(component);
-    this.keyExtractor = keyExtractor;
-  }
+  return function (this: any, ...args: Parameters<F>): any {
+    const key = JSON.stringify(args);
+    const now = Date.now();
+    const cached = cache.get(key);
 
-  async execute(data: T): Promise<R> {
-    const key = this.keyExtractor(data);
-    if (this.cache.has(key)) {
-      return this.cache.get(key)!;
+    if (cached && cached.expires > now) {
+      if (cached.hasError) {
+        return Promise.reject(cached.error);
+      }
+      return cached.value;
     }
-
-    const result = await this.component.execute(data);
-    this.cache.set(key, result);
-    return result;
-  }
-
-  clearCache(): void {
-    this.cache.clear();
-  }
-
-  deleteCache(key: string): void {
-    this.cache.delete(key);
-  }
-}
-
-/**
- * Timeout decorator that adds timeout to execution.
- */
-export class TimeoutDecorator<T, R> extends Decorator<T, R> {
-  private timeout: number;
-
-  constructor(component: Component<T, R>, timeout: number = 5000) {
-    super(component);
-    this.timeout = timeout;
-  }
-
-  async execute(data: T): Promise<R> {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const result = await Promise.race([
-        this.component.execute(data),
-        new Promise<never>((_, reject) => {
-          controller.signal.addEventListener('abort', () => {
-            reject(new Error(`Execution timed out after ${this.timeout}ms`));
+      const res = fn.apply(this, args);
+      if (res && typeof res.then === 'function') {
+        return res
+          .then((val: any) => {
+            cache.set(key, { value: val, hasError: false, expires: Date.now() + ttl });
+            return val;
+          })
+          .catch((err: any) => {
+            if (cacheErrors) {
+              cache.set(key, { error: err, hasError: true, expires: Date.now() + ttl });
+            }
+            throw err;
           });
-        }),
-      ]);
-      return result;
-    } finally {
-      clearTimeout(id);
+      }
+      cache.set(key, { value: res, hasError: false, expires: Date.now() + ttl });
+      return res;
+    } catch (err) {
+      if (cacheErrors) {
+        cache.set(key, { error: err, hasError: true, expires: Date.now() + ttl });
+      }
+      throw err;
     }
-  }
+  } as unknown as F;
 }
 
 /**
- * Validation decorator that validates input and output.
+ * Function-based Timing decorator.
  */
-export class ValidationDecorator<T, R> extends Decorator<T, R> {
-  private validateInput: (data: T) => boolean;
-  private validateOutput: (result: R) => boolean;
+export function TimingDecorator<F extends (...args: any[]) => any>(
+  fn: F,
+): (...args: Parameters<F>) => any {
+  return function (this: any, ...args: Parameters<F>): any {
+    const start = performance.now();
+    const res = fn.apply(this, args);
+    if (res && typeof res.then === 'function') {
+      return res.then((val: any) => {
+        const duration = performance.now() - start;
+        return { data: val, duration };
+      });
+    }
+    const duration = performance.now() - start;
+    return { data: res, duration };
+  };
+}
 
-  constructor(
-    component: Component<T, R>,
-    validateInput: (data: T) => boolean = () => true,
-    validateOutput: (result: R) => boolean = () => true,
-  ) {
-    super(component);
-    this.validateInput = validateInput;
-    this.validateOutput = validateOutput;
-  }
+/**
+ * Function-based Validation decorator.
+ */
+export function ValidationDecorator<F extends (...args: any[]) => any>(
+  fn: F,
+  options: { validator: (...args: any[]) => void; validateResult?: boolean },
+): F {
+  const { validator, validateResult = false } = options;
 
-  async execute(data: T): Promise<R> {
-    if (!this.validateInput(data)) {
-      throw new Error('Invalid input data');
+  return function (this: any, ...args: Parameters<F>): any {
+    const isAsync = fn.constructor.name === 'AsyncFunction';
+    try {
+      validator(...args);
+    } catch (err) {
+      if (isAsync) {
+        return Promise.reject(err);
+      }
+      throw err;
     }
 
-    const result = await this.component.execute(data);
-
-    if (!this.validateOutput(result)) {
-      throw new Error('Invalid output result');
+    const res = fn.apply(this, args);
+    if (res && typeof res.then === 'function') {
+      return res.then((val: any) => {
+        if (validateResult) {
+          validator(val);
+        }
+        return val;
+      });
     }
+    if (validateResult) {
+      validator(res);
+    }
+    return res;
+  } as unknown as F;
+}
 
-    return result;
-  }
+/**
+ * Helper to create custom decorator.
+ */
+export function createDecorator(decoratorFn: (fn: Function) => Function): (fn: any) => any {
+  return (fn: any) => decoratorFn(fn);
 }
 
 /**

@@ -11,6 +11,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   verbose: true,
   testTimeout: 10000,
+  forceExit: true,
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   // Use babel-jest to avoid TypeScript checking
   transform: {

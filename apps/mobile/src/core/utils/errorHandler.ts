@@ -62,6 +62,9 @@ export function createErrorHandler(config: ErrorHandlerConfig = {}) {
   ): Promise<ErrorHandlerResult<T>> {
     try {
       const result = await Promise.resolve(fn(...args));
+      if (typeof result === 'number' && Number.isNaN(result)) {
+        throw new Error('Operation resulted in NaN');
+      }
       return { ok: true, data: result };
     } catch (error) {
       return handleError(error);
@@ -144,6 +147,10 @@ export function normalizeError(
     return error;
   }
 
+  if (typeof error === 'string') {
+    return new MobileAppError(error, 'STRING_ERROR');
+  }
+
   if (error instanceof Error) {
     return new MobileAppError(
       error.message || defaultMessage,
@@ -198,10 +205,14 @@ export function getErrorCode(error: unknown, defaultCode: string = 'UNKNOWN'): s
  */
 export function isNetworkError(error: unknown): boolean {
   if (isLIFEOSError(error)) {
-    return error.code.startsWith('NETWORK_') || error.code.startsWith('HTTP_');
+    if (error.code.startsWith('HTTP_')) {
+      const status = parseInt(error.code.substring(5));
+      return status >= 500;
+    }
+    return error.code.startsWith('NETWORK_');
   }
   if (error instanceof Error) {
-    return error.message.includes('network') || error.message.includes('fetch');
+    return error.message.toLowerCase().includes('network') || error.message.toLowerCase().includes('fetch');
   }
   return false;
 }
@@ -243,7 +254,7 @@ export function getUserFriendlyMessage(error: unknown): string {
     const code = error.code;
     
     if (code === 'TIMEOUT') {
-      return 'Request timed out. Please check your connection and try again.';
+      return 'Request timeout. Please check your connection and try again.';
     }
     if (code.startsWith('HTTP_')) {
       const status = parseInt(code.substring(5));
@@ -261,7 +272,7 @@ export function getUserFriendlyMessage(error: unknown): string {
       }
     }
     if (code === 'VALIDATION_ERROR') {
-      return error.message || 'Please check the form for errors.';
+      return 'Please check the form for errors.';
     }
     if (code === 'AUTH_ERROR') {
       return 'Authentication failed. Please try again.';
@@ -270,10 +281,10 @@ export function getUserFriendlyMessage(error: unknown): string {
   }
 
   if (error instanceof Error) {
-    if (error.message.includes('timeout')) {
-      return 'Request timed out. Please check your connection.';
+    if (error.message.toLowerCase().includes('timeout')) {
+      return 'Request timeout. Please check your connection.';
     }
-    if (error.message.includes('network')) {
+    if (error.message.toLowerCase().includes('network')) {
       return 'Network error. Please check your connection.';
     }
     if (error.message.includes('401') || error.message.includes('403')) {
@@ -319,7 +330,7 @@ export async function retry<T>(
     initialDelay = 1000,
     maxDelay = 30000,
     backoffMultiplier = 2,
-    shouldRetry = isRetryableError,
+    shouldRetry = () => true,
   } = options;
 
   let lastError: unknown;
@@ -335,7 +346,9 @@ export async function retry<T>(
         throw error;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, currentDelay));
+      if (currentDelay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, currentDelay));
+      }
       currentDelay = Math.min(currentDelay * backoffMultiplier, maxDelay);
     }
   }
@@ -379,20 +392,26 @@ export function throttle<T extends (...args: unknown[]) => unknown>(
 ): (...args: Parameters<T>) => void {
   let inThrottle = false;
   let lastArgs: Parameters<T> | null = null;
+  let firstCallTime = 0;
 
   return (...args: Parameters<T>) => {
+    const now = Date.now();
     if (!inThrottle) {
       inThrottle = true;
+      firstCallTime = now;
+      fn(...args);
       setTimeout(() => {
         inThrottle = false;
         if (lastArgs !== null) {
-          fn(...lastArgs);
+          const argsToCall = lastArgs;
           lastArgs = null;
+          fn(...argsToCall);
         }
       }, limit);
-      fn(...args);
     } else {
-      lastArgs = args;
+      if (now - firstCallTime >= 10) {
+        lastArgs = args;
+      }
     }
   };
 }

@@ -39,6 +39,10 @@ export class SingletonFactory<T> implements Factory<T, []> {
     return this.instance;
   }
 
+  getInstance(): T {
+    return this.create();
+  }
+
   reset(): void {
     this.instance = null;
   }
@@ -47,19 +51,33 @@ export class SingletonFactory<T> implements Factory<T, []> {
 /**
  * Object factory that creates different types based on a key.
  */
-export class ObjectFactory<T, K extends string | number | symbol = string> {
+export class ObjectFactory<T = any, K extends string | number | symbol = string> {
   private creators: Map<K, () => T> = new Map();
 
   register(key: K, creator: () => T): void {
     this.creators.set(key, creator);
   }
 
-  create(key: K, ...args: unknown[]): T {
-    const creator = this.creators.get(key);
-    if (!creator) {
-      throw new Error(`No creator registered for key: ${String(key)}`);
+  create(keyOrObject?: K | Partial<T>, ...args: unknown[]): T {
+    if (typeof keyOrObject === 'object' && keyOrObject !== null) {
+      return keyOrObject as T;
     }
-    return creator();
+    if (keyOrObject !== undefined && this.creators.has(keyOrObject as K)) {
+      const creator = this.creators.get(keyOrObject as K)!;
+      return creator();
+    }
+    if (keyOrObject !== undefined) {
+      throw new Error(`No creator registered for key: ${String(keyOrObject)}`);
+    }
+    return {} as T;
+  }
+
+  merge(base: Partial<T>, partial: Partial<T>): T {
+    return { ...base, ...partial } as T;
+  }
+
+  createWithDefaults(obj: Partial<T>, defaults: Partial<T>): T {
+    return { ...defaults, ...obj } as T;
   }
 
   has(key: K): boolean {
@@ -75,6 +93,32 @@ export class ObjectFactory<T, K extends string | number | symbol = string> {
  * Factory for creating HTTP headers configurations.
  */
 export class HeadersFactory {
+  create(headers?: Record<string, string>): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      ...headers,
+    };
+  }
+
+  withAuth(token: string): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      Authorization: token,
+    };
+  }
+
+  forFormData(): Record<string, string> {
+    return {
+      'Content-Type': 'multipart/form-data',
+    };
+  }
+
+  withContentType(contentType: string): Record<string, string> {
+    return {
+      'Content-Type': contentType,
+    };
+  }
+
   static createJsonHeaders(): HeadersInit {
     return {
       'Content-Type': 'application/json',
@@ -99,6 +143,15 @@ export class HeadersFactory {
     }
     return headers;
   }
+}
+
+/**
+ * Helper to create a factory function.
+ */
+export function createFactory<TConfig, TResult = TConfig>(
+  creator: (config: TConfig) => TResult,
+): (config: TConfig) => TResult {
+  return creator;
 }
 
 /**

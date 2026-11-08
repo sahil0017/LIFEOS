@@ -53,7 +53,26 @@ export default function App() {
         onOpenModules={() => app.setScreen('Modules')}
       />}
     {!app.busy && app.screen === 'Assistant' && <AssistantScreen messages={app.chatMessages} input={app.chatInput} busy={app.chatBusy} error={app.chatError} aiAllowed={app.privacy.assistantAi} contextEnabled={app.privacy.assistantContext} configured={isApiConfigured} onInput={app.setChatInput} onSend={() => void app.sendMessage()} onOpenPrivacy={() => app.setScreen('Privacy')} onOpenModules={() => app.setScreen('Modules')} />}
-    {!app.busy && app.screen === 'Modules' && <ModulesScreen visionReady={isApiConfigured} stats={{ goals: app.goals.length, observations: app.observations.length, scenarios: app.scenarios.length, captures: app.visionCaptures.length, activityDays: app.activityDays.length }} healthAllowed={app.privacy.healthActivity} onOpen={(screen) => app.setScreen(screen)} onOpenConnections={() => app.setScreen('Connections')} onOpenHelpSearch={() => app.setScreen('HelpSearch')} />}
+    {!app.busy && app.screen === 'Modules' && <ModulesScreen
+      visionReady={isApiConfigured}
+      stats={{
+        goals: app.goals.length,
+        observations: app.observations.length,
+        scenarios: app.scenarios.length,
+        captures: app.visionCaptures.length,
+        activityDays: app.activityDays.length
+      }}
+      realDataContext={{
+        goals: app.goals,
+        observations: app.observations,
+        scenarios: app.scenarios,
+        activityDays: app.activityDays,
+      }}
+      healthAllowed={app.privacy.healthActivity}
+      onOpen={(screen) => app.setScreen(screen)}
+      onOpenConnections={() => app.setScreen('Connections')}
+      onOpenHelpSearch={() => app.setScreen('HelpSearch')}
+    />}
     {!app.busy && app.screen === 'Connections' && <ConnectionsScreen onBack={() => app.setScreen('Modules')} onOpenHealth={() => app.setScreen('Health')} />}
     {!app.busy && app.screen === 'Health' && <HealthScreen allowed={app.privacy.healthActivity} days={app.activityDays} busy={app.activityBusy} error={app.activityError} onOpenPrivacy={() => app.setScreen('Privacy')} onReadDevice={() => void app.readDeviceSteps()} onDelete={() => void app.removeDeviceActivity()} />}
     {!app.busy && app.screen === 'Environment' && <EnvironmentScreen />}

@@ -208,6 +208,8 @@ export interface LoginResponse {
  * API endpoint paths.
  */
 export const ApiPaths = {
+  // Updated health endpoint to match backend
+  health: '/health',
   // Auth
   login: '/api/auth/login',
   logout: '/api/auth/logout',
@@ -224,7 +226,7 @@ export const ApiPaths = {
   runEngine: '/api/engines/run',
   
   // Health
-  health: '/api/health',
+
 } as const;
 
 /**

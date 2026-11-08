@@ -43,32 +43,32 @@ export abstract class BaseSingleton {
 /**
  * Thread-safe singleton using a lock mechanism (async-safe).
  */
-export abstract class AsyncSingleton {
-  protected static instance: AsyncSingleton | null = null;
-  protected static lock: Promise<unknown> | null = null;
+export abstract class AsyncSingleton<T = any> {
+  protected static instance: any = null;
+  protected static instancePromise: Promise<any> | null = null;
 
   protected constructor() {
     // Protected constructor
   }
 
-  static async getInstance<T extends AsyncSingleton>(): Promise<T> {
-    const Constructor = this as any as { instance: T | null; lock: Promise<unknown> | null };
-    if (Constructor.instance === null || !(Constructor.instance instanceof this)) {
-      if (Constructor.lock === null) {
-        Constructor.lock = new Promise((resolve) => {
-          Constructor.instance = new (this as any)();
-          Constructor.lock = null;
-          resolve(undefined);
-        });
-      }
-      await Constructor.lock;
+  static getInstance<T extends AsyncSingleton>(this: new () => T): Promise<T> {
+    const Constructor = this as any;
+    if (!Constructor.instancePromise) {
+      Constructor.instancePromise = (async () => {
+        const inst = new (this as any)();
+        if (typeof inst.initialize === 'function') {
+          await inst.initialize();
+        }
+        Constructor.instance = inst;
+        return inst;
+      })();
     }
-    return Constructor.instance as T;
+    return Constructor.instancePromise;
   }
 
   static resetInstance(): void {
     (this as any).instance = null;
-    (this as any).lock = null;
+    (this as any).instancePromise = null;
   }
 }
 
@@ -76,41 +76,42 @@ export abstract class AsyncSingleton {
  * Singleton factory that creates and manages singleton instances.
  */
 export class SingletonContainer {
+  private static factories: Map<string, () => unknown> = new Map();
   private static instances: Map<string, unknown> = new Map();
 
-  static register<T>(key: string, creator: () => T): T {
-    const existing = this.instances.get(key);
-    if (existing) {
-      return existing as T;
-    }
-    const instance = creator();
-    this.instances.set(key, instance);
-    return instance;
+  static register<T>(key: string, creator: () => T): void {
+    this.factories.set(key, creator);
   }
 
-  static get<T>(key: string, creator: () => T): T {
-    const existing = this.instances.get(key);
-    if (existing) {
-      return existing as T;
+  static get<T>(key: string, fallback?: () => T): T {
+    if (this.instances.has(key)) {
+      return this.instances.get(key) as T;
     }
-    const instance = creator();
-    this.instances.set(key, instance);
-    return instance;
+    if (this.factories.has(key)) {
+      const creator = this.factories.get(key)!;
+      const instance = creator();
+      this.instances.set(key, instance);
+      return instance as T;
+    }
+    throw new Error(`Service not registered: ${key}`);
   }
 
   static has(key: string): boolean {
-    return this.instances.has(key);
+    return this.factories.has(key) || this.instances.has(key);
   }
 
   static reset(key?: string): void {
     if (key) {
+      this.factories.delete(key);
       this.instances.delete(key);
     } else {
+      this.factories.clear();
       this.instances.clear();
     }
   }
 
   static clear(): void {
+    this.factories.clear();
     this.instances.clear();
   }
 }

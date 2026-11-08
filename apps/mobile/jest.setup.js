@@ -4,9 +4,15 @@
  */
 
 // Mock fetch globally
-if (!global.fetch) {
-  global.fetch = jest.fn();
-}
+const originalNativeFetch = global.fetch;
+global.fetch = jest.fn((url, options) => {
+  return Promise.resolve(
+    new Response(JSON.stringify({ id: 1, title: 'test', success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  );
+});
 
 // Mock Request
 global.Request = class Request {
@@ -25,7 +31,17 @@ global.Response = class Response {
     this.status = init?.status || 200;
     this.ok = (init?.status || 200) >= 200 && (init?.status || 200) < 300;
     this.statusText = init?.statusText || 'OK';
-    this.headers = init?.headers || {};
+    const rawHeaders = init?.headers || {};
+    this.headers = {
+      ...rawHeaders,
+      get: (key) => {
+        const lower = key.toLowerCase();
+        for (const [k, v] of Object.entries(rawHeaders)) {
+          if (k.toLowerCase() === lower) return v;
+        }
+        return null;
+      },
+    };
   }
   
   async json() {
