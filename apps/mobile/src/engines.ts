@@ -5,12 +5,15 @@ export type EngineId =
   | 'neuro-symbolic' | 'memory' | 'generative' | 'multi-agent'
   | 'predictive' | 'neuromorphic' | 'evolutionary' | 'evaluation';
 
+import type { AnyObject } from './core/utils/types';
+
 export interface EngineResult {
   summary: string;
   evidence: string[];
   assumptions: string[];
   limitations: string[];
   version: string;
+  metadata?: AnyObject;
 }
 
 export interface EngineInput {

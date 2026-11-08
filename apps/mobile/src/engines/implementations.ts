@@ -21,7 +21,7 @@ export class ActivitySummaryEngine extends BaseEngine {
 
   async run(input: EngineInput): Promise<EngineResult> {
     const goals = input.goals || [];
-    const sessionCount = goals.reduce((sum, goal) => sum + goal.sessionCount, 0);
+    const sessionCount = goals.reduce((sum, goal) => sum + (goal.sessionCount || 0), 0);
 
     let summary: string;
     if (goals.length === 0) {
@@ -62,7 +62,7 @@ export class GoalProgressEngine extends BaseEngine {
     const completedGoals = goals.filter((g) => g.completed).length;
     const completionRate = totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0;
 
-    const totalSessions = goals.reduce((sum, goal) => sum + goal.sessionCount, 0);
+    const totalSessions = goals.reduce((sum, goal) => sum + (goal.sessionCount || 0), 0);
     const avgSessionsPerGoal = totalGoals > 0 ? totalSessions / totalGoals : 0;
 
     let summary: string;
@@ -185,7 +185,7 @@ export class PriorityAnalysisEngine extends BaseEngine {
     goals.forEach((goal) => {
       const priority = goal.priority || 'medium';
       priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
-      prioritySessions[priority] = (prioritySessions[priority] || 0) + goal.sessionCount;
+      prioritySessions[priority] = (prioritySessions[priority] || 0) + (goal.sessionCount || 0);
       if (goal.completed) {
         priorityCompleted[priority] = (priorityCompleted[priority] || 0) + 1;
       }
@@ -237,9 +237,9 @@ export class SessionDensityEngine extends BaseEngine {
 
   async run(input: EngineInput): Promise<EngineResult> {
     const goals = input.goals || [];
-    const totalSessions = goals.reduce((sum, goal) => sum + goal.sessionCount, 0);
+    const totalSessions = goals.reduce((sum, goal) => sum + (goal.sessionCount || 0), 0);
 
-    const sessionsPerGoal = goals.map((goal) => goal.sessionCount);
+    const sessionsPerGoal = goals.map((goal) => goal.sessionCount || 0);
     const maxSessions = Math.max(...sessionsPerGoal, 0);
     const minSessions = Math.min(...sessionsPerGoal.filter((s) => s > 0), Infinity) || 0;
     const avgSessions = totalSessions / goals.length || 0;
@@ -332,13 +332,14 @@ export class NeuroSymbolicEngine extends BaseEngine {
         `${violations.length} potential violations found.`;
     }
 
-    return this.createBaseResult(summary)
-      .evidence.push(...evidence)
-      .assumptions.push(...assumptions)
-      .limitations.push(...limitations);
+    let result = this.createBaseResult(summary);
+    result = this.addEvidence(result, evidence);
+    result = this.addAssumption(result, assumptions);
+    result = this.addLimitation(result, limitations);
+    return result;
   }
 
-  private detectPatterns(goals: Goal[]): string[] {
+  private detectPatterns(goals: readonly Goal[]): string[] {
     const patterns: string[] = [];
 
     // Detect goal categories
@@ -377,11 +378,11 @@ export class NeuroSymbolicEngine extends BaseEngine {
     return patterns.length > 0 ? patterns : ['No significant patterns detected'];
   }
 
-  private validateConstraints(goals: Goal[]): string[] {
+  private validateConstraints(goals: readonly Goal[]): string[] {
     const violations: string[] = [];
 
     // Check for balance constraint
-    const totalSessions = goals.reduce((sum, goal) => sum + goal.sessionCount, 0);
+    const totalSessions = goals.reduce((sum, goal) => sum + (goal.sessionCount || 0), 0);
     const avgSessions = goals.length > 0 ? totalSessions / goals.length : 0;
 
     if (avgSessions > 2) {
@@ -452,27 +453,28 @@ export class MultiAgentEngine extends BaseEngine {
         `Diverse viewpoints provide comprehensive insights.`;
     }
 
-    return this.createBaseResult(summary)
-      .evidence.push(...evidence)
-      .assumptions.push(...assumptions)
-      .limitations.push(...limitations);
+    let result = this.createBaseResult(summary);
+    result = this.addEvidence(result, evidence);
+    result = this.addAssumption(result, assumptions);
+    result = this.addLimitation(result, limitations);
+    return result;
   }
 
-  private agent1Perspective(goals: Goal[]): string {
+  private agent1Perspective(goals: readonly Goal[]): string {
     // Agent 1: Focuses on completion
     const completed = goals.filter((g) => g.completed).length;
     const total = goals.length;
     return `Completion rate: ${completed}/${total} (${total > 0 ? ((completed / total) * 100).toFixed(1) : 0}%)`;
   }
 
-  private agent2Perspective(goals: Goal[]): string {
+  private agent2Perspective(goals: readonly Goal[]): string {
     // Agent 2: Focuses on sessions
-    const totalSessions = goals.reduce((sum, goal) => sum + goal.sessionCount, 0);
+    const totalSessions = goals.reduce((sum, goal) => sum + (goal.sessionCount || 0), 0);
     const avgSessions = goals.length > 0 ? totalSessions / goals.length : 0;
     return `Average sessions per goal: ${avgSessions.toFixed(1)}`;
   }
 
-  private agent3Perspective(goals: Goal[]): string {
+  private agent3Perspective(goals: readonly Goal[]): string {
     // Agent 3: Focuses on time
     const withDeadlines = goals.filter((g) => g.targetDate).length;
     const overdue = goals.filter((g) => {

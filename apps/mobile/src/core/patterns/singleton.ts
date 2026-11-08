@@ -14,7 +14,7 @@ export interface Singleton<T> {
  * Subclasses must call getInstance() instead of using constructor directly.
  */
 export abstract class BaseSingleton {
-  protected static instance: BaseSingleton | null = null;
+  private static instances: Map<Function, BaseSingleton> = new Map();
 
   protected constructor() {
     // Protected constructor prevents direct instantiation
@@ -25,19 +25,18 @@ export abstract class BaseSingleton {
    * Creates and returns the singleton instance.
    * Override in subclasses with proper typing.
    */
-  static getInstance<T extends BaseSingleton>(): T {
-    const Constructor = this as new () => T;
-    if (Constructor.instance === null || !(Constructor.instance instanceof Constructor)) {
-      Constructor.instance = new Constructor();
+  static getInstance<T extends BaseSingleton>(this: new () => T): T {
+    if (!BaseSingleton.instances.has(this)) {
+      BaseSingleton.instances.set(this, new this());
     }
-    return Constructor.instance as T;
+    return BaseSingleton.instances.get(this) as T;
   }
 
   /**
    * Resets the singleton instance for testing purposes.
    */
   static resetInstance(): void {
-    (this as any).instance = null;
+    BaseSingleton.instances.clear();
   }
 }
 

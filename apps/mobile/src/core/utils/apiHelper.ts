@@ -2,8 +2,9 @@
  * API client utilities for making HTTP requests with better error handling.
  */
 
-import { ApiError, NetworkError, isLIFEOSError } from '../exceptions/base';
+import { NetworkError, isLIFEOSError } from '../exceptions/base';
 import type { RequestOptions } from './types';
+import type { MobileAppError } from '../exceptions/base';
 
 /**
  * Default request options.
@@ -157,8 +158,14 @@ async function handleResponse<T>(response: Response, url: string, options: Reque
     try {
       const body = await response.text();
       if (body) {
-        error.metadata = error.metadata || {};
-        error.metadata.body = body;
+        const networkError = error as any;
+        error = new NetworkError(
+          error.message,
+          error.code,
+          networkError.statusCode,
+          networkError.url,
+          { ...error.metadata, body },
+        );
       }
     } catch {
       // Ignore error parsing body
@@ -187,7 +194,7 @@ export async function request<T = unknown>(
     },
   };
 
-  const { method, headers, body, timeout, retries = 0, retryDelay = 1000 } = mergedOptions;
+  const { method, headers, body: requestBody, timeout, retries = 0, retryDelay = 1000 } = mergedOptions;
 
   let lastError: unknown;
   
@@ -197,7 +204,7 @@ export async function request<T = unknown>(
       const requestOptions: RequestInit = {
         method,
         headers,
-        body: body ? JSON.stringify(body) : undefined,
+        body: requestBody ? JSON.stringify(requestBody) : undefined,
         signal: controller.signal,
       };
 
@@ -205,7 +212,7 @@ export async function request<T = unknown>(
       
       const response = await Promise.race([
         fetch(url, requestOptions),
-        timeoutPromise,
+        timeoutPromise as Promise<Response>,
       ]);
 
       return await handleResponse<T>(response, url, mergedOptions);

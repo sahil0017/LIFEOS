@@ -9,7 +9,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Subject, Observer, BaseObserver } from '../core/patterns';
 import { deepClone, deepEqual, normalizeKeysToCamelCase, removeEmptyValues } from '../core/utils';
 import { MobileAppError } from '../core/exceptions/base';
-import type { Goal, CreateGoalRequest, UpdateGoalRequest } from '../goals';
+import type { Goal } from '../goals';
+import type { CreateGoalRequest, UpdateGoalRequest } from '../api/types';
 import type { EngineId, EngineResult, EngineInput } from '../engines';
 import type { AnyObject } from '../core/utils/types';
 

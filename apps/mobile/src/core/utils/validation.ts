@@ -379,19 +379,17 @@ export function mergeSchemas<T extends AnyObject>(
   schema1: ValidationSchema<T>,
   schema2: ValidationSchema<T>,
 ): ValidationSchema<T> {
-  const merged: ValidationSchema<T> = { ...schema1 };
+  const merged: AnyObject = { ...schema1 };
   
   Object.entries(schema2).forEach(([field, rules]) => {
-    if (merged[field as keyof T]) {
-      const existingRules = Array.isArray(merged[field as keyof T])
-        ? merged[field as keyof T]!
-        : [merged[field as keyof T]!];
+    if (merged[field]) {
+      const existingRules = Array.isArray(merged[field]) ? merged[field] : [merged[field]];
       const newRules = Array.isArray(rules) ? rules : [rules];
-      merged[field as keyof T] = [...existingRules, ...newRules] as ValidationRule<T[Extract<keyof T, string>]>[];
+      merged[field] = [...existingRules, ...newRules];
     } else {
-      merged[field as keyof T] = rules as ValidationRule<T[Extract<keyof T, string>]> | ValidationRule<T[Extract<keyof T, string>]>[];
+      merged[field] = rules;
     }
   });
   
-  return merged;
+  return merged as ValidationSchema<T>;
 }

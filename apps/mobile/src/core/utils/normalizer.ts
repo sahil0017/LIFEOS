@@ -66,7 +66,7 @@ export function normalizeKeysToCamelCase<T extends AnyObject>(
   const result: AnyObject = {};
   Object.entries(obj).forEach(([key, value]) => {
     const camelKey = toCamelCase(key);
-    result[camelKey] = value && typeof value === 'object' ? normalizeKeysToCamelCase(value) : value;
+    result[camelKey] = value && typeof value === 'object' && value !== null ? normalizeKeysToCamelCase(value as AnyObject) : value;
   });
   return result as any;
 }
@@ -88,7 +88,7 @@ export function normalizeKeysToSnakeCase<T extends AnyObject>(
   const result: AnyObject = {};
   Object.entries(obj).forEach(([key, value]) => {
     const snakeKey = toSnakeCase(key);
-    result[snakeKey] = value && typeof value === 'object' ? normalizeKeysToSnakeCase(value) : value;
+    result[snakeKey] = value && typeof value === 'object' && value !== null ? normalizeKeysToSnakeCase(value as AnyObject) : value;
   });
   return result as any;
 }

@@ -167,7 +167,7 @@ export function useLifeOs() {
   async function analyzeTwin() {
     if (!privacy.twinAi || !isApiConfigured || twinBusy) return;
     const items = [...observations.slice(0, 15).map((item) => ({ id: item.id, category: item.category, text: item.label, occurredAt: item.occurredAt })),
-    ...goals.slice(0, 5).map((goal) => ({ id: 1_000_000 + goal.id, category: 'goal', text: goal.title, occurredAt: 'user-entered goal; date not supplied' })),
+    ...goals.slice(0, 5).map((goal) => ({ id: 1_000_000 + (typeof goal.id === 'number' ? goal.id : parseInt(String(goal.id))), category: 'goal', text: goal.title, occurredAt: 'user-entered goal; date not supplied' })),
     ...scenarios.slice(0, 5).map((scenario) => ({ id: 2_000_000 + scenario.id, category: 'scenario', text: `${scenario.title}; horizon ${scenario.horizonMonths} months; estimated weekly time change ${scenario.weeklyHoursChange} hours; estimated monthly cash-flow change ${scenario.monthlyCashflowChange} in the user's currency. These are user-supplied assumptions.`, occurredAt: scenario.createdAt }))];
     setTwinBusy(true); setTwinError(null);
     try {
