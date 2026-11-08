@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { apiFetch, isApiConfigured } from '../api';
 
 interface StoredDocument { id: string; title: string; content: string; created_at?: string }
@@ -38,6 +40,21 @@ export function FilesScreen() {
 
   useEffect(() => { const timer = setTimeout(() => { void load(); }, 0); return () => clearTimeout(timer); }, [load]);
 
+async function importFile() {
+    if (adding) return;
+    setAdding(true); setError(null);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, type: '*/*' });
+      if (result.canceled) { setAdding(false); return; }
+      const asset = result.assets?.[0];
+      if (!asset) { setAdding(false); return; }
+      const content = await FileSystem.readAsStringAsync(asset.uri);
+      const t = asset.name || 'Imported document';
+      await apiFetch<{ id: string }>('/documents', { method: 'POST', body: JSON.stringify({ title: t, content }) });
+      await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not import file.'); }
+    finally { setAdding(false); }
+  }
   async function addDocument() {
     const t = title.trim(); const c = content.trim();
     if (!c || adding) return;
@@ -60,6 +77,9 @@ export function FilesScreen() {
     <TextInput style={[styles.input, styles.contentInput]} placeholder="Paste or write the document content…" placeholderTextColor="#6c7f70" value={content} onChangeText={setContent} multiline maxLength={8000} />
     <Pressable accessibilityRole="button" onPress={() => void addDocument()} disabled={adding || !content.trim()} style={[styles.primaryButton, (adding || !content.trim()) && styles.disabled]}>
       {adding ? <ActivityIndicator color="#07150b" size="small" /> : <Text style={styles.primaryText}>Save document</Text>}
+    </Pressable>
+    <Pressable accessibilityRole="button" onPress={() => void importFile()} disabled={adding} style={[styles.outlineButton, adding && styles.disabled]}>
+      <Ionicons name="folder-open-outline" size={13} color="#84f6b0" /><Text style={styles.outlineText}>Import from device</Text>
     </Pressable>
 
     <View style={styles.searchRow}>
