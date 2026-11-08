@@ -10,8 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Goal } from '../goals';
 import type { TwinObservation, TwinPattern, TwinScenario } from '../twin';
 import type { VisionCapture } from '../vision';
-import type { DailyActivity } from '../api';
-import { apiFetch, isApiConfigured } from '../api';
+import type { DailyActivity, AiHealth } from '../api';
+import { apiFetch, isApiConfigured, checkAiHealth } from '../api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -53,6 +53,10 @@ export interface HomeScreenProps {
   onOpenEnvironment: () => void;
   onOpenPrivacy: () => void;
   onOpenModules: () => void;
+  /** Proactive daily update produced by the background intelligence loop. */
+  autoUpdate: { title: string; body: string; at: string } | null;
+  autoSyncing: boolean;
+  onDismissAutoUpdate: () => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -64,6 +68,36 @@ function timeAgo(iso: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ─── Service Status chip ─────────────────────────────────────────────────
+
+function ServiceStatus({ configured }: { configured: boolean }) {
+  const [health, setHealth] = useState<AiHealth | null>(null);
+  useEffect(() => {
+    if (!configured) return;
+    let cancelled = false;
+    checkAiHealth().then((h) => { if (!cancelled) setHealth(h); }).catch(() => { if (!cancelled) setHealth({ status: 'not_configured', configured: false, connected: false, error: 'unreachable' }); });
+    return () => { cancelled = true; };
+  }, [configured]);
+  const state = !configured ? 'offline'
+    : !health ? 'checking'
+    : health.connected ? 'connected'
+    : 'degraded';
+  const meta: Record<string, { dot: string; label: string }> = {
+    connected: { dot: '#61e894', label: 'AI service connected' },
+    degraded: { dot: '#ffd580', label: 'AI service degraded — check backend secrets' },
+    checking: { dot: '#8aa79a', label: 'Checking AI service…' },
+    offline: { dot: '#8aa79a', label: 'Service not configured' },
+    unreachable: { dot: '#ff9b9b', label: 'Backend unreachable' },
+  };
+  const m = meta[state];
+  return (
+    <View style={styles.statusChip} accessibilityRole="text" accessibilityLabel={m.label}>
+      <View style={[styles.statusDot, { backgroundColor: m.dot }]} />
+      <Text style={styles.statusText}>{m.label}</Text>
+    </View>
+  );
 }
 
 // ─── Module Insight Card ──────────────────────────────────────────────────────
@@ -390,7 +424,24 @@ export function HomeScreen(props: HomeScreenProps) {
         </Pressable>
       </View>
 
+      {/* ── Proactive daily update (background intelligence) ── */}
+      {props.autoUpdate && (
+        <Pressable accessibilityRole="button" onPress={props.onDismissAutoUpdate} style={styles.autoUpdateCard}>
+          <View style={styles.autoUpdateHeader}>
+            <View style={styles.autoUpdateBadge}><Ionicons name="sparkles-outline" size={11} color="#07150b" /></View>
+            <Text style={styles.autoUpdateTitle}>{props.autoUpdate.title}</Text>
+            <Text style={styles.autoUpdateTime}>{new Date(props.autoUpdate.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</Text>
+          </View>
+          <Text style={styles.autoUpdateBody}>{props.autoUpdate.body}</Text>
+          <Text style={styles.autoUpdateHint}>Computed for you from your live signals — tap to dismiss</Text>
+        </Pressable>
+      )}
+      {props.autoSyncing && !props.autoUpdate && (
+        <Text style={styles.syncNote}>Syncing your signals…</Text>
+      )}
+
       {/* ── Ask assistant shortcut ── */}
+      <ServiceStatus configured={props.aiConfigured} />
       <Pressable
         accessibilityRole="button"
         onPress={props.onOpenAssistant}
@@ -510,6 +561,17 @@ const styles = StyleSheet.create({
   locationChipText: { color: '#68cb89', fontSize: 11, fontWeight: '600', letterSpacing: 0.2, flexShrink: 1 },
 
   // Assistant bar
+  autoUpdateCard: { borderRadius: 16, borderWidth: 1, borderColor: '#2b6540', backgroundColor: '#102619', padding: 14, marginBottom: 14 },
+  autoUpdateHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 7 },
+  autoUpdateBadge: { width: 18, height: 18, borderRadius: 6, backgroundColor: '#61e894', alignItems: 'center', justifyContent: 'center' },
+  autoUpdateTitle: { flex: 1, color: '#eaf4ec', fontSize: 12, fontWeight: '700' },
+  autoUpdateTime: { color: '#687b6d', fontSize: 9 },
+  autoUpdateBody: { color: '#c6d8ca', fontSize: 12, lineHeight: 18 },
+  autoUpdateHint: { color: '#4a6354', fontSize: 9, marginTop: 8 },
+  syncNote: { color: '#5f7566', fontSize: 10, marginBottom: 10, textAlign: 'center' },
+  statusChip: { flexDirection: 'row', alignItems: 'center', gap: 7, alignSelf: 'flex-start', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20, backgroundColor: '#0d1f12', borderWidth: 1, borderColor: '#1e4a2b', marginBottom: 12 },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusText: { color: '#8fa594', fontSize: 10, fontWeight: '600' },
   assistantBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: '#102619', borderColor: '#2b6540', borderWidth: 1, marginBottom: 14 },
   assistantBarText: { flex: 1, color: '#a5b8a9', fontSize: 13, lineHeight: 18 },
 

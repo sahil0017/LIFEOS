@@ -6,7 +6,6 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { AssistantScreen } from './src/screens/AssistantScreen';
 import { ModulesScreen } from './src/screens/ModulesScreen';
 import { VisualIntelligenceScreen } from './src/screens/VisualIntelligenceScreen';
-import { ConnectionsScreen } from './src/screens/ConnectionsScreen';
 import { HelpSearchScreen } from './src/screens/HelpSearchScreen';
 import { PrivacyScreen } from './src/screens/PrivacyScreen';
 import { HealthScreen } from './src/screens/HealthScreen';
@@ -17,11 +16,13 @@ import { AccessibilityScreen } from './src/screens/AccessibilityScreen';
 import { EnvironmentScreen } from './src/screens/EnvironmentScreen';
 import { FoodScreen } from './src/screens/FoodScreen';
 import { FilesScreen } from './src/screens/FilesScreen';
+import { OverviewScreen } from './src/screens/OverviewScreen';
 import { useLifeOs } from './src/useLifeOs';
 import { isApiConfigured } from './src/api';
 
-const nav: { id: 'Home' | 'Modules' | 'Privacy'; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+const nav: { id: 'Home' | 'Assistant' | 'Modules' | 'Privacy'; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: 'Home', label: 'Home', icon: 'home-outline' },
+  { id: 'Assistant', label: 'Assistant', icon: 'sparkles-outline' },
   { id: 'Modules', label: 'Tools', icon: 'apps-outline' }, { id: 'Privacy', label: 'Privacy', icon: 'shield-checkmark-outline' },
 ];
 
@@ -51,29 +52,19 @@ export default function App() {
         onOpenEnvironment={() => app.setScreen('Environment')}
         onOpenPrivacy={() => app.setScreen('Privacy')}
         onOpenModules={() => app.setScreen('Modules')}
+        autoUpdate={app.autoUpdate}
+        autoSyncing={app.autoSyncing}
+        onDismissAutoUpdate={app.dismissAutoUpdate}
       />}
-    {!app.busy && app.screen === 'Assistant' && <AssistantScreen messages={app.chatMessages} input={app.chatInput} busy={app.chatBusy} error={app.chatError} aiAllowed={app.privacy.assistantAi} contextEnabled={app.privacy.assistantContext} configured={isApiConfigured} onInput={app.setChatInput} onSend={() => void app.sendMessage()} onOpenPrivacy={() => app.setScreen('Privacy')} onOpenModules={() => app.setScreen('Modules')} />}
+    {!app.busy && app.screen === 'Assistant' && <AssistantScreen messages={app.chatMessages} input={app.chatInput} busy={app.chatBusy} error={app.chatError} aiAllowed={app.privacy.assistantAi} contextEnabled={app.privacy.assistantContext} configured={isApiConfigured} aiConnected={app.aiHealth ? app.aiHealth.connected : null} onInput={app.setChatInput} onSend={() => void app.sendMessage()} onOpenPrivacy={() => app.setScreen('Privacy')} onOpenModules={() => app.setScreen('Modules')} />}
     {!app.busy && app.screen === 'Modules' && <ModulesScreen
-      visionReady={isApiConfigured}
-      stats={{
-        goals: app.goals.length,
-        observations: app.observations.length,
-        scenarios: app.scenarios.length,
-        captures: app.visionCaptures.length,
-        activityDays: app.activityDays.length
-      }}
-      realDataContext={{
-        goals: app.goals,
-        observations: app.observations,
-        scenarios: app.scenarios,
-        activityDays: app.activityDays,
-      }}
-      healthAllowed={app.privacy.healthActivity}
+      aiConnected={app.aiHealth?.connected ?? false}
+      engineRun={app.engineRun}
+      onRunEngine={(moduleId) => void app.runIntelligence(moduleId)}
+      onClearEngineRun={app.clearEngineRun}
       onOpen={(screen) => app.setScreen(screen)}
-      onOpenConnections={() => app.setScreen('Connections')}
       onOpenHelpSearch={() => app.setScreen('HelpSearch')}
     />}
-    {!app.busy && app.screen === 'Connections' && <ConnectionsScreen onBack={() => app.setScreen('Modules')} onOpenHealth={() => app.setScreen('Health')} />}
     {!app.busy && app.screen === 'Health' && <HealthScreen allowed={app.privacy.healthActivity} days={app.activityDays} busy={app.activityBusy} error={app.activityError} onOpenPrivacy={() => app.setScreen('Privacy')} onReadDevice={() => void app.readDeviceSteps()} onDelete={() => void app.removeDeviceActivity()} />}
     {!app.busy && app.screen === 'Environment' && <EnvironmentScreen />}
     {!app.busy && app.screen === 'Accessibility' && <AccessibilityScreen />}
@@ -82,6 +73,7 @@ export default function App() {
     {!app.busy && app.screen === 'Pedometer' && <PedometerScreen />}
     {!app.busy && app.screen === 'Food' && <FoodScreen />}
     {!app.busy && app.screen === 'Files' && <FilesScreen />}
+    {!app.busy && app.screen === 'Overview' && <OverviewScreen onBack={() => app.setScreen('Modules')} />}
     {!app.busy && app.screen === 'HelpSearch' && <HelpSearchScreen query={app.helpQuery} results={app.helpResults} busy={app.helpBusy} error={app.helpError} onQuery={app.setHelpQuery} onSearch={() => void app.searchHelp()} onBack={() => app.setScreen('Modules')} />}
     {!app.busy && app.screen === 'PersonalTwin' && <PersonalTwinScreen goals={app.goals} observations={app.observations} patterns={app.patterns} scenarios={app.scenarios} embeddings={app.embeddings} insight={app.twinInsight} busy={app.twinBusy} error={app.twinError} aiAllowed={app.privacy.twinAi} configured={isApiConfigured} onOpenPrivacy={() => app.setScreen('Privacy')} onRecordObservation={app.addTwinObservation} onCreateScenario={app.addTwinScenario} onDeleteObservation={app.removeTwinObservation} onDeleteScenario={app.removeTwinScenario} onAnalyze={app.analyzeTwin} />}
     {!app.busy && app.screen === 'VisualIntelligence' && <VisualIntelligenceScreen visionReady={isApiConfigured} aiAllowed={app.privacy.visualAi} cameraGranted={Boolean(app.cameraPermission?.granted)} onOpenPrivacy={() => app.setScreen('Privacy')} busy={app.visualBusy} answer={app.visualAnswer} error={app.visualError} captures={app.visionCaptures} onSaveCapture={app.saveRemoteVisionCapture} onAnalyze={(id, image, question) => void app.analyzeVisual(id, image, question)} onDeleteCapture={app.removeVisualCapture} onClearAnswer={app.clearVisualAnswer} onBack={() => app.setScreen('Home')} />}

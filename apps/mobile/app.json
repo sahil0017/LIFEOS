@@ -9,7 +9,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMotionUsageDescription": "LIFEOS reads step totals only when you request an activity refresh."
+        "NSMotionUsageDescription": "LIFEOS reads step totals only when you request an activity refresh.",
+        "NSMicrophoneUsageDescription": "LIFEOS records voice notes only when you tap record."
       }
     },
     "android": {
@@ -19,7 +20,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,7 +37,26 @@
           "recordAudioAndroid": false
         }
       ],
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow LIFEOS to use the microphone to record voice notes when you tap record."
+        }
+      ]
+    ],
+    "extra": {
+      "workersAiUrl": "https://lifeos-cloudflare-ai.lifeos-cloudflare-ai.workers.dev",
+      "eas": {
+        "projectId": "3e3f3838-66a7-4868-9cff-0c766894717d"
+      }
+    },
+    "owner": "sahkanun",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3e3f3838-66a7-4868-9cff-0c766894717d"
+    }
   }
 }

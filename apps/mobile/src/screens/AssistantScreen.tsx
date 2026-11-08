@@ -1,5 +1,6 @@
 import * as Speech from 'expo-speech';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { ChatMessage } from './types';
 
 interface Props {
@@ -10,6 +11,8 @@ interface Props {
   aiAllowed: boolean;
   contextEnabled: boolean;
   configured: boolean;
+  /** Live AI service status from the backend health probe. */
+  aiConnected: boolean | null;
   onInput: (value: string) => void;
   onSend: () => void;
   onOpenPrivacy: () => void;
@@ -23,9 +26,18 @@ const prompts = [
 ];
 
 export function AssistantScreen(props: Props) {
+  const lastAssistant = [...props.messages].reverse().find((m) => m.role === 'assistant');
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    <View style={styles.intro}>
+    <View style={styles.topbar}>
       <Text style={styles.eyebrow}>PERSONAL ASSISTANT</Text>
+      {props.configured && (
+        <View style={styles.statusPill}>
+          <View style={[styles.statusDot, { backgroundColor: props.aiConnected === null ? '#8aa79a' : props.aiConnected ? '#61e894' : '#ffd580' }]} />
+          <Text style={styles.statusText}>{props.aiConnected === null ? 'checking' : props.aiConnected ? 'live' : 'degraded'}</Text>
+        </View>
+      )}
+    </View>
+    <View style={styles.intro}>
       <Text style={styles.title}>Think it through.</Text>
       <Text style={styles.subtitle}>Turn a goal or decision into a practical plan using only the context you choose to share.</Text>
     </View>
@@ -42,24 +54,26 @@ export function AssistantScreen(props: Props) {
     </View> : <>
       {props.messages.length === 0 ? <>
         <View style={styles.starterCard}>
-          <View style={styles.starterMark}><Text style={styles.starterMarkText}>✳</Text></View>
+          <View style={styles.starterMark}><Ionicons name="sparkles-outline" size={20} color="#73f5a8" /></View>
           <Text style={styles.starterTitle}>Start with what matters.</Text>
           <Text style={styles.starterBody}>{props.contextEnabled ? 'Relevant saved notes and goals can be selected for each request.' : 'This chat only sees what you type. Enable Personal context for Assistant in Privacy to use matching notes and goals.'}</Text>
         </View>
-        <Text style={styles.sectionLabel}>Useful when you need to</Text>
-        <View style={styles.valueGrid}>{[
-          ['MAKE A PLAN', 'Break a goal into next steps'], ['SPOT A PATTERN', 'Connect repeated notes to a small experiment'], ['WEIGH A CHOICE', 'See trade-offs and missing information'], ['USE YOUR CONTEXT', 'Bring relevant LIFEOS notes into the answer'],
-        ].map(([title, detail]) => <View key={title} style={styles.valueCard}><Text style={styles.valueTitle}>{title}</Text><Text style={styles.valueDetail}>{detail}</Text></View>)}</View>
         <Text style={styles.sectionLabel}>A few ways to begin</Text>
         {prompts.map((prompt) => <Pressable key={prompt.title} accessibilityRole="button" onPress={() => props.onInput(prompt.text)} style={styles.promptCard}>
           <View style={styles.promptCopy}><Text style={styles.promptTitle}>{prompt.title}</Text><Text style={styles.promptText}>{prompt.text}</Text></View>
-          <Text style={styles.arrow}>↗</Text>
+          <Ionicons name="arrow-forward-outline" size={15} color="#66e89a" />
         </Pressable>)}
       </> : <View style={styles.messageList}>
         {props.messages.map((message, index) => <View key={`${index}-${message.role}`} style={[styles.message, message.role === 'assistant' ? styles.assistantMessage : styles.userMessage]}>
-          <Text style={styles.messageRole}>{message.role === 'assistant' ? 'LIFEOS' : 'YOU'}</Text>
+          <View style={styles.messageHeader}>
+            <Text style={styles.messageRole}>{message.role === 'assistant' ? 'LIFEOS' : 'YOU'}</Text>
+            {message.role === 'assistant' && message === lastAssistant && (
+              <Pressable accessibilityRole="button" accessibilityLabel="Read answer aloud" onPress={() => Speech.speak(message.content)} style={styles.speakBtn}>
+                <Ionicons name="volume-high-outline" size={13} color="#61e894" />
+              </Pressable>
+            )}
+          </View>
           <Text style={styles.messageText}>{message.content}</Text>
-          {message.role === 'assistant' && <Pressable accessibilityRole="button" onPress={() => Speech.speak(message.content)} style={{marginTop:6}}><Text style={{color:'#61e894',fontSize:11}}>🔊 Speak</Text></Pressable>}
         </View>)}
       </View>}
 
@@ -70,7 +84,7 @@ export function AssistantScreen(props: Props) {
           editable={!props.busy} placeholder="Ask a question or share a decision…" placeholderTextColor="#71877a" style={styles.composerInput} />
         <Pressable accessibilityRole="button" accessibilityLabel="Send message" disabled={!props.input.trim() || props.busy} onPress={props.onSend}
           style={[styles.sendButton, (!props.input.trim() || props.busy) && styles.disabled]}>
-          <Text style={styles.sendIcon}>↗</Text>
+          <Ionicons name="arrow-up-outline" size={20} color="#07140b" />
         </Pressable>
       </View>
       <Text style={styles.disclaimer}>Review important advice and decisions carefully.</Text>
@@ -85,9 +99,13 @@ export function AssistantScreen(props: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#06100b' },
-  content: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24, maxWidth: 720, width: '100%', alignSelf: 'center' },
-  intro: { marginBottom: 20 },
-  eyebrow: { color: '#78d99a', fontSize: 10, letterSpacing: 1.5, fontWeight: '700', marginBottom: 8 },
+  content: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 24, maxWidth: 720, width: '100%', alignSelf: 'center' },
+  topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  eyebrow: { color: '#78d99a', fontSize: 10, letterSpacing: 1.5, fontWeight: '700' },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12, backgroundColor: '#0d1f12', borderWidth: 1, borderColor: '#1e4a2b' },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { color: '#8fa594', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
+  intro: { marginBottom: 18 },
   title: { color: '#f0f8f2', fontSize: 30, lineHeight: 37, fontWeight: '700', letterSpacing: -0.7 },
   subtitle: { color: '#9cad9f', fontSize: 14, lineHeight: 21, marginTop: 7 },
   permissionCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 17, borderWidth: 1, borderColor: '#294333', backgroundColor: '#0d1b12', padding: 15, marginBottom: 16 },
@@ -98,7 +116,6 @@ const styles = StyleSheet.create({
   permissionText: { color: '#9cad9f', fontSize: 11, lineHeight: 16, marginTop: 4 },
   starterCard: { borderRadius: 20, borderWidth: 1, borderColor: '#244a32', backgroundColor: '#0d1b12', padding: 18, marginBottom: 22 },
   starterMark: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#153b24', marginBottom: 12 },
-  starterMarkText: { color: '#73f5a8', fontSize: 21 },
   starterTitle: { color: '#eaf4ec', fontSize: 17, lineHeight: 23, fontWeight: '600' },
   starterBody: { color: '#9cad9f', fontSize: 12, lineHeight: 18, marginTop: 6 },
   valueGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
@@ -115,7 +132,9 @@ const styles = StyleSheet.create({
   message: { maxWidth: '94%', borderRadius: 15, padding: 13 },
   assistantMessage: { alignSelf: 'flex-start', backgroundColor: '#123321', borderColor: '#1e5635', borderWidth: 1 },
   userMessage: { alignSelf: 'flex-end', backgroundColor: '#17221a', borderColor: '#2b3a2f', borderWidth: 1 },
-  messageRole: { color: '#6ddf98', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginBottom: 5 },
+  messageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 },
+  messageRole: { color: '#6ddf98', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
+  speakBtn: { padding: 3 },
   messageText: { color: '#e3f0e6', fontSize: 13, lineHeight: 20 },
   error: { color: '#ff9b9b', fontSize: 12, lineHeight: 18, marginBottom: 10 },
   spinner: { marginVertical: 10 },

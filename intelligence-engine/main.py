@@ -17,6 +17,7 @@ from modules.predictive import PredictiveModule
 from modules.neuromorphic import NeuromorphicModule
 from modules.multiverse import MultiverseModule
 from services.orchestrator import ModuleOrchestrator
+from services.cloudflare_ai import get_ai_client
 
 app = FastAPI(title="LIFEOS Intelligence Backend", version="1.0.0")
 
@@ -123,6 +124,66 @@ async def health():
     )
 
 
+@app.get("/health/ai")
+async def health_ai():
+    """Expose Cloudflare Workers AI connectivity so the worker/app can verify the link."""
+    client = get_ai_client()
+    configured = client.is_configured
+    status: Dict[str, Any] = {
+        "configured": configured,
+        "account_id_present": bool(client.config.account_id),
+        "api_token_present": bool(client.config.api_token),
+        "default_model": client.config.default_model,
+    }
+    if configured:
+        # Lightweight live probe: generate 1 token from a tiny prompt — but skip
+        # the network entirely when the circuit breaker is open (429 quota etc.).
+        breaker = client.breakers["text"]
+        if not breaker.allow_request():
+            status.update({
+                "connected": False,
+                "probe_model": client.config.default_model,
+                "error": f"Circuit breaker open: {breaker.opened_reason or 'recent failures'}",
+                "circuit": {name: b.state for name, b in client.breakers.items()},
+                "retry_in_seconds": breaker.seconds_until_retry,
+            })
+            status["status"] = "degraded"
+            return status
+        probe = await client.generate_text("Reply with the single word: ok", max_tokens=5, temperature=0)
+        status.update({
+            "connected": not probe.is_fallback,
+            "probe_model": probe.model,
+            "error": probe.error,
+        })
+        status["status"] = "ok" if not probe.is_fallback else "degraded"
+        status["circuit"] = {name: b.state for name, b in client.breakers.items()}
+    else:
+        status.update({"connected": False, "status": "not_configured",
+                       "error": "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN secrets on Fly"})
+    return status
+
+
+@app.post("/ai/generate")
+async def ai_generate(body: Dict[str, Any]):
+    """Direct access to Cloudflare Workers AI text generation for the worker/app."""
+    client = get_ai_client()
+    response = await client.generate_text(
+        prompt=str(body.get("prompt", "")),
+        system_prompt=body.get("system_prompt"),
+        model=str(body.get("model", client.config.default_model)),
+        temperature=float(body.get("temperature", 0.3)),
+        max_tokens=int(body.get("max_tokens", 1024)),
+    )
+    if response.is_fallback and not client.is_configured:
+        raise HTTPException(status_code=503, detail="Cloudflare AI not configured on the backend")
+    return {
+        "content": response.content,
+        "model": response.model,
+        "is_fallback": response.is_fallback,
+        "error": response.error,
+    }
+
+
 @app.get("/modules")
 async def list_modules():
     """List all 10 intelligence modules with descriptions and interconnections."""
@@ -210,6 +271,15 @@ async def list_modules():
     }
 
 
+@app.post("/run/cross-module", response_model=CrossModuleOutput)
+async def run_cross_module(query: CrossModuleQuery):
+    """Run multiple interconnected modules together for a complex problem."""
+    result = await orchestrator.run_cross_module(
+        query.module_ids, query.data, query.user_id, query.problem_type
+    )
+    return result
+
+
 @app.post("/run/{module_id}")
 async def run_module(module_id: str, input: ModuleInput):
     """Run a single intelligence module."""
@@ -217,15 +287,6 @@ async def run_module(module_id: str, input: ModuleInput):
         raise HTTPException(status_code=404, detail=f"Module {module_id} not found")
 
     result = await orchestrator.run_single(module_id, input.data, input.user_id, input.context)
-    return result
-
-
-@app.post("/run/cross-module", response_model=CrossModuleOutput)
-async def run_cross_module(query: CrossModuleQuery):
-    """Run multiple interconnected modules together for a complex problem."""
-    result = await orchestrator.run_cross_module(
-        query.module_ids, query.data, query.user_id, query.problem_type
-    )
     return result
 
 

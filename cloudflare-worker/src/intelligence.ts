@@ -1,6 +1,6 @@
 import type { ModuleId } from '../../shared/context';
 
-const MODEL = '@cf/google/gemma-4-26b-a4b-it';
+const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const EMBEDDING_MODEL = '@cf/baai/bge-m3';
 
 export interface IntelligenceResponse {
@@ -505,4 +505,142 @@ export async function solveRealWorldProblem(
       };
     }
   }
+}
+
+// ─── 360° overview: every data domain feeds its engines, then one synthesis ───
+
+export interface DomainInsight {
+  domain: string;
+  label: string;
+  engines: string[];
+  count: number;
+  insights: string[];
+  confidence: number;
+  execution_time_ms: number;
+}
+
+export interface OverviewResponse {
+  generatedAt: string;
+  domains: DomainInsight[];
+  cross_insights: string[];
+  recommendations: string[];
+  confidence: number;
+  total_execution_time_ms: number;
+  data_gaps: string[];
+}
+
+/** Domain → engines that consume its signals (aligned with MODULE_GRAPH interconnections). */
+const DOMAIN_ENGINES: Record<string, string[]> = {
+  activity: ['predictive', 'world_model', 'neuromorphic'],
+  nutrition: ['multimodal', 'cognitive_memory', 'world_model'],
+  learning: ['world_model', 'causal', 'generative', 'predictive'],
+  routines: ['causal', 'cognitive_memory', 'neuro_symbolic', 'multi_agent'],
+  environment: ['neuromorphic', 'world_model', 'multi_agent'],
+  goals: ['world_model', 'quantum', 'causal', 'multi_agent'],
+};
+
+const DOMAIN_LABELS: Record<string, string> = {
+  activity: 'Activity & movement',
+  nutrition: 'Nutrition',
+  learning: 'Learning',
+  routines: 'Routines & patterns',
+  environment: 'Environment',
+  goals: 'Goals & direction',
+};
+
+/** Load every stored domain for this user and map raw rows into engine-friendly shape. */
+export async function loadAllDomains(env: Env, userId: string): Promise<Record<string, { count: number; data: Record<string, unknown> }>> {
+  const [activity, meals, learning, observations, weather, goals] = await Promise.all([
+    env.lifeos_data.prepare('SELECT day, steps FROM daily_activity WHERE user_id = ? ORDER BY day ASC LIMIT 30').bind(userId).all<{ day: string; steps: number }>().catch(() => ({ results: [] as { day: string; steps: number }[] })),
+    env.lifeos_data.prepare('SELECT description, calories, protein_g, carbs_g, fat_g, created_at FROM meals WHERE user_id = ? ORDER BY created_at DESC LIMIT 14').bind(userId).all<Record<string, unknown>>().catch(() => ({ results: [] as Record<string, unknown>[] })),
+    env.lifeos_data.prepare('SELECT skill, progress FROM learning_goals WHERE user_id = ? ORDER BY created_at DESC LIMIT 20').bind(userId).all<Record<string, unknown>>().catch(() => ({ results: [] as Record<string, unknown>[] })),
+    env.lifeos_data.prepare('SELECT category, label, occurred_at AS occurredAt FROM twin_observations WHERE user_id = ? ORDER BY occurred_at DESC LIMIT 100').bind(userId).all<Record<string, unknown>>().catch(() => ({ results: [] as Record<string, unknown>[] })),
+    env.lifeos_data.prepare('SELECT weather_json FROM weather_cache WHERE user_id = ?').bind(userId).first<{ weather_json: string }>().catch(() => null),
+    env.lifeos_data.prepare('SELECT title FROM goals WHERE user_id = ? ORDER BY id DESC LIMIT 20').bind(userId).all<Record<string, unknown>>().catch(() => ({ results: [] as Record<string, unknown>[] })),
+  ]);
+  const routines = (observations.results ?? []).filter((o) => o.category === 'routine' || o.category === 'behavior');
+  const preferences = (observations.results ?? []).filter((o) => o.category === 'preference' || o.category === 'interest');
+  return {
+    activity: { count: (activity.results ?? []).length, data: { time_series: (activity.results ?? []) } },
+    nutrition: { count: (meals.results ?? []).length, data: { meals: (meals.results ?? []).slice(0, 10) } },
+    learning: { count: (learning.results ?? []).length, data: { goals: (learning.results ?? []) } },
+    routines: { count: routines.length + preferences.length, data: { observations: [...routines, ...preferences].slice(0, 25) } },
+    environment: { count: weather ? 1 : 0, data: { weather: weather ? JSON.parse(weather.weather_json) : null } },
+    goals: { count: (goals.results ?? []).length, data: { goals: (goals.results ?? []) } },
+  };
+}
+
+/**
+ * Run the full 360° pass: each domain's data goes to the engines wired for it,
+ * engines enrich each other through the orchestrator graph, then one model
+ * synthesizes cross-domain insights from all engine outputs.
+ */
+export async function buildOverview(env: Env, userId: string): Promise<OverviewResponse> {
+  const start = Date.now();
+  const pythonUrl = env.PYTHON_BACKEND_URL;
+  const domains = await loadAllDomains(env, userId);
+  const dataGaps = Object.entries(domains).filter(([, d]) => d.count === 0).map(([key]) => key);
+
+  const domainInsights: DomainInsight[] = [];
+  for (const [domain, bundle] of Object.entries(domains)) {
+    const engines = DOMAIN_ENGINES[domain] ?? ['world_model'];
+    const label = DOMAIN_LABELS[domain] ?? domain;
+    if (bundle.count === 0) { domainInsights.push({ domain, label, engines, count: 0, insights: [], confidence: 0, execution_time_ms: 0 }); continue; }
+    let insights: string[] = [];
+    let confidence = 0.5;
+    let elapsed = 0;
+    if (pythonUrl) {
+      try {
+        const res = await fetch(`${pythonUrl}/run/cross-module`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ module_ids: engines.slice(0, 3), data: { trigger: 'overview', domain, ...bundle.data }, user_id: userId, problem_type: 'behavior_change' }),
+          signal: AbortSignal.timeout(45_000),
+        });
+        if (res.ok) {
+          const payload = await res.json() as { synthesis?: { key_insights?: unknown; confidence?: unknown }; total_execution_time_ms?: unknown };
+          const lines = payload.synthesis?.key_insights;
+          if (Array.isArray(lines)) insights = lines.filter((line): line is string => typeof line === 'string' && line.trim().length > 0).slice(0, 3);
+          if (typeof payload.synthesis?.confidence === 'number') confidence = payload.synthesis.confidence;
+          if (typeof payload.total_execution_time_ms === 'number') elapsed = payload.total_execution_time_ms;
+        }
+      } catch { /* fall through to empty insights for this domain */ }
+    }
+    domainInsights.push({ domain, label, engines, count: bundle.count, insights, confidence, execution_time_ms: Math.round(elapsed) });
+  }
+
+  // Cross-domain synthesis: give one model the full engine output set.
+  const populated = domainInsights.filter((d) => d.insights.length > 0);
+  let crossInsights: string[] = [];
+  let recommendations: string[] = [];
+  let confidence = populated.length > 0 ? 0.55 : 0.3;
+  if (populated.length > 0) {
+    const summary = populated.map((d) => `${d.label} (${d.engines.slice(0, 2).join(', ')}): ${d.insights.join(' | ')}`).join('\n');
+    try {
+      const result = await env.AI.run(MODEL, {
+        messages: [
+          { role: 'system', content: 'You are LIFEOS 360, an integrator. You receive per-domain findings from separate engines (activity, nutrition, learning, routines, environment, goals). Produce exactly 4 cross-domain insights that connect at least two domains each — e.g. how low steps on high-calorie days affect a learning goal. Only combine what the findings actually state; do not invent data. Then 3 concrete recommendations. Keep every line under 25 words.' },
+          { role: 'user', content: summary },
+        ],
+        max_tokens: 512,
+      }) as { choices?: Array<{ message?: { content?: unknown } }> };
+      const reply = result.choices?.[0]?.message?.content;
+      if (typeof reply === 'string') {
+        const lines = reply.split('\n').map((line) => line.replace(/^[\s\-*\d.)]+/, '').trim()).filter((line) => line.length > 10);
+        crossInsights = lines.slice(0, 4);
+        recommendations = lines.slice(4, 7);
+        confidence = 0.7;
+      }
+    } catch { /* leave empty — per-domain insights still returned */ }
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    domains: domainInsights,
+    cross_insights: crossInsights,
+    recommendations,
+    confidence,
+    total_execution_time_ms: Date.now() - start,
+    data_gaps: dataGaps,
+  };
 }

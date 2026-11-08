@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { Pedometer } from 'expo-sensors';
 import { useCameraPermissions } from 'expo-camera';
 import type { Goal } from './goals';
@@ -9,12 +10,14 @@ import { derivePatterns } from './twin';
 import type { ObservationCategory, TwinEmbedding, TwinObservation, TwinPattern, TwinScenario } from './twin';
 import type { VisionCapture } from './vision';
 import type { PrivacyPreferences } from './privacy';
+import { permissionDbKey } from './privacy';
 import { rankObservations } from './contextSearch';
 import { apiFetch, deleteCaptureRemote, deleteObservationRemote, deleteScenarioRemote, isApiConfigured, loadDeviceActivity, saveDeviceActivity, deleteDeviceActivity, loadSnapshot, saveCaptureAnswerRemote, saveCaptureRemote, saveEmbeddingRemote, saveObservation, savePrivacyRemote, saveScenario } from './api';
 import type { DailyActivity } from './api';
+import { runEngine, runCrossModule, buildEnginePayload, extractInsights, getAiHealth, type AiHealth, type ModuleRunResult, type CrossModuleResult } from './intelligenceApi';
 import type { ChatMessage } from './screens/types';
 
-export type Screen = 'Home' | 'Assistant' | 'Modules' | 'PersonalTwin' | 'VisualIntelligence' | 'Privacy' | 'Connections' | 'HelpSearch' | 'Health' | 'Food' | 'Environment' | 'Accessibility' | 'Learning' | 'Voice' | 'Pedometer' | 'Files';
+export type Screen = 'Home' | 'Assistant' | 'Modules' | 'PersonalTwin' | 'VisualIntelligence' | 'Privacy' | 'HelpSearch' | 'Health' | 'Food' | 'Environment' | 'Accessibility' | 'Learning' | 'Voice' | 'Pedometer' | 'Files' | 'Overview';
 
 /** All shared app state and the operations that mutate it. */
 export function useLifeOs() {
@@ -48,7 +51,11 @@ export function useLifeOs() {
   const [deviceStepsToday, setDeviceStepsToday] = useState<number | null>(null);
   const [activityBusy, setActivityBusy] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [autoUpdate, setAutoUpdate] = useState<{ title: string; body: string; at: string } | null>(null);
+  const [autoSyncing, setAutoSyncing] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [aiHealth, setAiHealth] = useState<AiHealth | null>(null);
+  const [engineRun, setEngineRun] = useState<{ busy: boolean; error: string | null; result: ModuleRunResult | null; cross: CrossModuleResult | null }>({ busy: false, error: null, result: null, cross: null });
 
   useEffect(() => {
     let active = true;
@@ -102,8 +109,7 @@ export function useLifeOs() {
   }, [goals]);
 
   async function togglePrivacy(key: keyof PrivacyPreferences, enabled: boolean) {
-    const dbKey = key === 'assistantAi' ? 'assistant_ai' : key === 'assistantContext' ? 'assistant_context' : key === 'twinAi' ? 'twin_ai' : key === 'healthActivity' ? 'health_activity' : 'visual_ai';
-    await savePrivacyRemote(dbKey, enabled);
+    await savePrivacyRemote(permissionDbKey(key), enabled);
     setPrivacy((current) => ({ ...current, [key]: enabled }));
     if (key === 'healthActivity' && !enabled) setActivityDays([]);
   }
@@ -112,22 +118,28 @@ export function useLifeOs() {
     if (!privacy.healthActivity || activityBusy) return;
     setActivityBusy(true); setActivityError(null);
     try {
-      if (Platform.OS !== 'ios') throw new Error('Device step history is available in Expo Go on iPhone. Android requires a development build for its activity permission.');
-      if (!await Pedometer.isAvailableAsync()) throw new Error('This iPhone does not have an available step counter.');
-      const permission = await Pedometer.requestPermissionsAsync();
-      if (!permission.granted) throw new Error('Allow Motion & Fitness access to read step totals.');
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const days: { day: string; steps: number }[] = [];
-      for (let offset = 6; offset >= 0; offset -= 1) {
-        const start = new Date(today); start.setDate(today.getDate() - offset);
-        const end = new Date(start); end.setDate(start.getDate() + 1); if (offset === 0) end.setTime(Date.now());
-        const result = await Pedometer.getStepCountAsync(start, end);
-        const day = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
-        days.push({ day, steps: result.steps });
-      }
+      const days = await collectDeviceSteps();
       await saveDeviceActivity(days); setActivityDays(days.map((item) => ({ ...item, source: 'ios_pedometer', recordedAt: new Date().toISOString() })));
     } catch (cause) { setActivityError(cause instanceof Error ? cause.message : 'Could not read device steps.'); }
     finally { setActivityBusy(false); }
+  }
+
+  /** Shared step-collection logic for both the manual sync and the background loop. */
+  async function collectDeviceSteps(): Promise<{ day: string; steps: number }[]> {
+    if (Platform.OS !== 'ios') throw new Error('Device step history is available in Expo Go on iPhone. Android requires a development build for its activity permission.');
+    if (!await Pedometer.isAvailableAsync()) throw new Error('This iPhone does not have an available step counter.');
+    const permission = await Pedometer.requestPermissionsAsync();
+    if (!permission.granted) throw new Error('Allow Motion & Fitness access to read step totals.');
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const days: { day: string; steps: number }[] = [];
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const start = new Date(today); start.setDate(today.getDate() - offset);
+      const end = new Date(start); end.setDate(start.getDate() + 1); if (offset === 0) end.setTime(Date.now());
+      const result = await Pedometer.getStepCountAsync(start, end);
+      const day = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+      days.push({ day, steps: result.steps });
+    }
+    return days;
   }
 
   async function removeDeviceActivity() {
@@ -171,10 +183,33 @@ export function useLifeOs() {
     ...scenarios.slice(0, 5).map((scenario) => ({ id: 2_000_000 + scenario.id, category: 'scenario', text: `${scenario.title}; horizon ${scenario.horizonMonths} months; estimated weekly time change ${scenario.weeklyHoursChange} hours; estimated monthly cash-flow change ${scenario.monthlyCashflowChange} in the user's currency. These are user-supplied assumptions.`, occurredAt: scenario.createdAt }))];
     setTwinBusy(true); setTwinError(null);
     try {
-      const result = await apiFetch<{ insight?: unknown; embeddings?: unknown }>('/twin/analyze', { method: 'POST', body: JSON.stringify({ items }) });
-      if (typeof result.insight !== 'string' || !Array.isArray(result.embeddings)) throw new Error('Analysis did not return a valid result.');
-      for (const entry of result.embeddings) { if (typeof entry !== 'object' || entry === null) continue; const row = entry as { id?: unknown; vector?: unknown }; if (typeof row.id === 'number' && observations.some((item) => item.id === row.id) && Array.isArray(row.vector) && row.vector.every((value) => typeof value === 'number')) await saveEmbeddingRemote({ observationId: row.id, vector: row.vector }); }
-      setTwinInsight(result.insight); setEmbeddings((current) => [...current.filter((item) => !observations.some((observation) => observation.id === item.observationId)), ...((result.embeddings as { id: number; vector: number[] }[]).filter((row) => observations.some((observation) => observation.id === row.id)).map((row) => ({ observationId: row.id, vector: row.vector })))]);
+      let insight: string | null = null;
+      let embeddingsPayload: { id: number; vector: number[] }[] | null = null;
+      // Primary: real cross-module synthesis from the intelligence backend.
+      try {
+        const cross = await runCrossModule(['cognitive_memory', 'world_model'], { items }, 'twin_reflection');
+        const lines = [
+          ...cross.synthesis.key_insights,
+          ...Object.values(cross.results).flatMap((r) => extractInsights(r.result).slice(0, 2)),
+        ].filter(Boolean);
+        if (lines.length > 0) insight = lines.join('\n\n');
+      } catch { /* fall through to the worker twin route below */ }
+      // Fallback: worker's dedicated twin route (embeddings + insight).
+      if (insight === null) {
+        const result = await apiFetch<{ insight?: unknown; embeddings?: unknown }>('/twin/analyze', { method: 'POST', body: JSON.stringify({ items }) });
+        if (typeof result.insight !== 'string' || !Array.isArray(result.embeddings)) throw new Error('Analysis did not return a valid result.');
+        insight = result.insight;
+        embeddingsPayload = (result.embeddings as { id: number; vector: number[] }[]);
+      }
+      if (embeddingsPayload) {
+        for (const row of embeddingsPayload) {
+          if (typeof row.id === 'number' && observations.some((item) => item.id === row.id) && Array.isArray(row.vector) && row.vector.every((value) => typeof value === 'number')) {
+            await saveEmbeddingRemote({ observationId: row.id, vector: row.vector });
+          }
+        }
+        setEmbeddings((current) => [...current.filter((item) => !observations.some((observation) => observation.id === item.observationId)), ...embeddingsPayload!.filter((row) => observations.some((observation) => observation.id === row.id)).map((row) => ({ observationId: row.id, vector: row.vector }))]);
+      }
+      setTwinInsight(insight);
     } catch (cause) { setTwinError(cause instanceof Error ? cause.message : 'Could not update your Twin.'); }
     finally { setTwinBusy(false); }
   }
@@ -257,6 +292,96 @@ export function useLifeOs() {
   const openVisual = () => { setVisualAnswer(null); setVisualError(null); setScreen('VisualIntelligence'); };
   const clearVisualAnswer = () => { setVisualAnswer(null); setVisualError(null); };
 
+  /** Refresh the AI service status chip (worker → Fly → Cloudflare). */
+  async function refreshAiHealth() {
+    if (!isApiConfigured) return;
+    try { setAiHealth(await getAiHealth()); } catch { setAiHealth({ status: 'not_configured', configured: false, connected: false, error: 'unreachable' }); }
+  }
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(() => { if (active) void refreshAiHealth(); }, 0);
+    return () => { active = false; clearTimeout(timer); };
+  }, []);
+
+  // Background intelligence loop — runs on open and on every foreground return.
+  useEffect(() => {
+    if (busy) return; // wait until the initial snapshot has loaded
+    void runBackgroundIntelligence();
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void runBackgroundIntelligence(); });
+    return () => subscription.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, privacy.healthActivity]);
+
+  /** Run one intelligence engine (or a cross-module synthesis) against real workspace context. */
+  async function runIntelligence(moduleId: string, problemType?: string) {
+    if (!isApiConfigured || engineRun.busy) return;
+    setEngineRun({ busy: true, error: null, result: null, cross: null });
+    const ctx = { goals: goals.map((g) => ({ title: g.title, sessionCount: g.sessionCount })), observations: observations.map((o) => ({ category: o.category, label: o.label, occurredAt: o.occurredAt })), scenarios: scenarios.map((s) => ({ title: s.title, horizonMonths: s.horizonMonths, weeklyHoursChange: s.weeklyHoursChange, monthlyCashflowChange: s.monthlyCashflowChange })), activityDays: activityDays.map((d) => ({ day: d.day, steps: d.steps })) };
+    const payload = buildEnginePayload(ctx);
+    try {
+      if (problemType) {
+        const enginesFor = {
+          ambiguous_decision: ['quantum', 'multi_agent', 'world_model'],
+          career_change: ['world_model', 'causal', 'multi_agent', 'predictive'],
+          financial_planning: ['world_model', 'causal', 'predictive', 'neuro_symbolic'],
+          health_wellness: ['world_model', 'cognitive_memory', 'predictive', 'multimodal'],
+          learning_goals: ['world_model', 'causal', 'generative', 'predictive'],
+          behavior_change: ['causal', 'cognitive_memory', 'neuro_symbolic', 'multi_agent'],
+        } as Record<string, string[]>;
+        const ids = enginesFor[problemType] ?? ['world_model', 'causal', 'multi_agent'];
+        const cross = await runCrossModule(ids, payload, problemType);
+        setEngineRun({ busy: false, error: null, result: null, cross });
+      } else {
+        const result = await runEngine(moduleId, payload);
+        setEngineRun({ busy: false, error: null, result, cross: null });
+      }
+    } catch (cause) {
+      setEngineRun({ busy: false, error: cause instanceof Error ? cause.message : 'Could not run this engine. Try again.', result: null, cross: null });
+    }
+  }
+  function clearEngineRun() { setEngineRun({ busy: false, error: null, result: null, cross: null }); }
+
+  /**
+   * Background intelligence loop — the core LIFEOS promise.
+   * Runs on app open and whenever the app returns to the foreground:
+   *  1. Silently syncs today's device steps (no manual button).
+   *  2. Once per day, runs the predictive engine on your real data and
+   *     surfaces a proactive daily update so the app "makes you smart".
+   */
+  const lastAutoRunKey = 'lifeos_last_auto_intel';
+  async function runBackgroundIntelligence() {
+    if (!isApiConfigured || autoSyncing) return;
+    setAutoSyncing(true);
+    try {
+      // 1. Silent step sync (only if the user granted health access).
+      if (privacy.healthActivity) {
+        try {
+          const days = await collectDeviceSteps();
+          await saveDeviceActivity(days);
+          setActivityDays(days.map((item) => ({ ...item, source: 'ios_pedometer', recordedAt: new Date().toISOString() })));
+        } catch { /* Steps stay as-is; never block the loop on permission friction. */ }
+      }
+      // 2. Proactive daily update — once per local day.
+      const today = new Date();
+      const dayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      let lastRun: string | null = null;
+      try { lastRun = await SecureStore.getItemAsync(lastAutoRunKey); } catch { /* ignore */ }
+      if (lastRun === dayKey) return;
+      const payload = buildEnginePayload({
+        goals: goals.map((g) => ({ title: g.title, sessionCount: g.sessionCount })),
+        observations: observations.map((o) => ({ category: o.category, label: o.label, occurredAt: o.occurredAt })),
+        scenarios: scenarios.map((s) => ({ title: s.title, horizonMonths: s.horizonMonths, weeklyHoursChange: s.weeklyHoursChange, monthlyCashflowChange: s.monthlyCashflowChange })),
+        activityDays: activityDays.map((d) => ({ day: d.day, steps: d.steps })),
+      });
+      const result = await runEngine('predictive', payload);
+      const lines = extractInsights(result.result);
+      if (lines.length > 0) {
+        setAutoUpdate({ title: 'Your daily update', body: lines[0], at: new Date().toISOString() });
+      }
+      try { await SecureStore.setItemAsync(lastAutoRunKey, dayKey); } catch { /* ignore */ }
+    } finally { setAutoSyncing(false); }
+  }
+
   return {
     screen, setScreen, openVisual, clearVisualAnswer,
     goals, busy, error, summary, engineError,
@@ -268,6 +393,9 @@ export function useLifeOs() {
     visualAnswer, visualBusy, visualError, visionCaptures,
     saveRemoteVisionCapture, analyzeVisual, removeVisualCapture,
     activityDays, activityBusy, activityError, readDeviceSteps, removeDeviceActivity, deviceStepsToday,
+    autoUpdate, autoSyncing, dismissAutoUpdate: () => setAutoUpdate(null), runBackgroundIntelligence,
+    aiHealth, refreshAiHealth,
+    engineRun, runIntelligence, clearEngineRun,
   };
 }
 

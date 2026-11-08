@@ -1,11 +1,13 @@
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 import type { Goal } from './goals';
 import type { TwinEmbedding, TwinObservation, TwinScenario } from './twin';
 import type { VisionCapture } from './vision';
 import type { PrivacyPreferences } from './privacy';
 
-const endpoint = process.env.EXPO_PUBLIC_WORKERS_AI_URL?.trim()?.replace(/\/chat\/?$/, '');
+const endpoint = (process.env.EXPO_PUBLIC_WORKERS_AI_URL ?? Constants.expoConfig?.extra?.workersAiUrl ?? '')
+  .toString().trim().replace(/\/chat\/?$/, '');
 const tokenKey = 'lifeos_device_session';
 export interface AppSnapshot { goals: Goal[]; observations: TwinObservation[]; scenarios: TwinScenario[]; embeddings: TwinEmbedding[]; captures: VisionCapture[]; privacy: PrivacyPreferences }
 async function sessionToken(): Promise<string> {
@@ -69,4 +71,17 @@ export async function runModuleRemote(moduleId: string, data: Record<string, unk
     method: 'POST',
     body: JSON.stringify({ module: moduleId, data, user_id: 'mobile_user' }),
   });
+}
+
+export interface AiHealth {
+  status: 'ok' | 'degraded' | 'not_configured';
+  configured: boolean;
+  connected: boolean;
+  default_model?: string;
+  error?: string | null;
+}
+
+/** Ask the Python backend (Fly) whether its Cloudflare Workers AI link is live. */
+export async function checkAiHealth(): Promise<AiHealth> {
+  return apiFetch<AiHealth>('/intelligence/health/ai');
 }

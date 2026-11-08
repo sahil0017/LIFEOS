@@ -6,48 +6,56 @@ Provides comprehensive AI model access with intelligent fallbacks and error hand
 import os
 import json
 import asyncio
+import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 import requests
+import requests.adapters
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-# Cloudflare Workers AI Model Catalog
+# Cloudflare Workers AI Model Catalog — real model IDs from the Workers AI catalog
+# https://developers.cloudflare.com/workers-ai/models/
 MODEL_CATALOG = {
     # Text Generation
-    "gemma-4-26b-it": "@cf/google/gemma-4-26b-a4b-it",
-    "gemma-4-9b-it": "@cf/google/gemma-4-9b-it",
-    "llama-3.2-11b": "@cf/meta/llama-3.2-11b-vision-instruct",
-    "llama-3.2-90b": "@cf/meta/llama-3.2-90b-vision-instruct",
-    "mistral-large": "@cf/mistral/mistral-large-2407",
-    
+    "llama-3.3-70b": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "llama-3.1-8b": "@cf/meta/llama-3.1-8b-instruct",
+    "gemma-3-12b": "@cf/google/gemma-3-12b-it",
+    "mistral-small-3.1": "@cf/mistralai/mistral-small-3.1-24b-instruct",
+    "qwen-2.5-coder-32b": "@cf/qwen/qwen2.5-coder-32b-instruct",
+
     # Embeddings
     "bge-m3": "@cf/baai/bge-m3",
     "bge-base": "@cf/baai/bge-base-en-v1.5",
-    
+
     # Vision
-    "moondream-3.1": "@cf/moondream/moondream3.1-9B-A2B",
     "llama-3.2-vision": "@cf/meta/llama-3.2-11b-vision-instruct",
-    
+
     # Audio
     "whisper": "@cf/openai/whisper",
-    
-    # Code
-    "code-llama": "@cf/meta/code-llama-70b",
+
+    # Legacy aliases kept for backwards compatibility with existing callers
+    "gemma-4-26b-it": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "gemma-4-9b-it": "@cf/google/gemma-3-12b-it",
+    "llama-3.2-11b": "@cf/meta/llama-3.2-11b-vision-instruct",
+    "llama-3.2-90b": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "mistral-large": "@cf/mistralai/mistral-small-3.1-24b-instruct",
+    "code-llama": "@cf/qwen/qwen2.5-coder-32b-instruct",
+    "moondream-3.1": "@cf/meta/llama-3.2-11b-vision-instruct",
 }
 
 # Model recommendations by task
 TASK_MODELS = {
-    "text_generation": ["gemma-4-26b-it", "llama-3.2-90b", "mistral-large"],
+    "text_generation": ["llama-3.3-70b", "mistral-small-3.1", "gemma-3-12b"],
     "embeddings": ["bge-m3", "bge-base"],
-    "vision": ["moondream-3.1", "llama-3.2-vision"],
+    "vision": ["llama-3.2-vision"],
     "audio_transcription": ["whisper"],
-    "code_generation": ["code-llama", "gemma-4-26b-it"],
-    "analysis": ["gemma-4-26b-it", "llama-3.2-90b"],
-    "summarization": ["gemma-4-26b-it", "llama-3.2-90b"],
-    "classification": ["gemma-4-26b-it", "llama-3.2-90b"],
+    "code_generation": ["qwen-2.5-coder-32b", "llama-3.3-70b"],
+    "analysis": ["llama-3.3-70b", "mistral-small-3.1"],
+    "summarization": ["llama-3.3-70b", "mistral-small-3.1"],
+    "classification": ["llama-3.3-70b", "gemma-3-12b"],
 }
 
 
@@ -65,8 +73,10 @@ class AIConfig:
     def __post_init__(self):
         self.account_id = self.account_id or os.getenv("CLOUDFLARE_ACCOUNT_ID")
         self.api_token = self.api_token or os.getenv("CLOUDFLARE_API_TOKEN")
+        # Support the legacy env var alias used elsewhere in LIFEOS
+        self.api_token = self.api_token or os.getenv("CLOUDFLARE_AI_TOKEN")
         if self.account_id:
-            self.base_url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run"
+            self.base_url = self.base_url or f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run"
 
 
 @dataclass
@@ -79,6 +89,94 @@ class AIResponse:
     raw_response: Optional[Dict[str, Any]] = None
     is_fallback: bool = False
     error: Optional[str] = None
+
+
+class CircuitBreakerOpen(Exception):
+    """Raised inline when the circuit breaker prevents an API call."""
+    pass
+
+
+class CircuitBreaker:
+    """Circuit breaker for outbound API calls.
+
+    States: closed (normal) -> open (failing, calls short-circuit) -> half_open (probe).
+    Trips immediately on quota/rate-limit errors (429) or after `failure_threshold`
+    consecutive failures. While open, callers should fall back locally instead of
+    hammering the provider.
+    """
+
+    def __init__(
+        self,
+        name: str = "api",
+        failure_threshold: int = 3,
+        recovery_seconds: int = 300,
+        half_open_max_calls: int = 1,
+    ):
+        self.name = name
+        self.failure_threshold = failure_threshold
+        self.recovery_seconds = recovery_seconds
+        self.half_open_max_calls = half_open_max_calls
+        self._state = "closed"
+        self._failures = 0
+        self._opened_at = 0.0
+        self._half_open_calls = 0
+        self._last_error: Optional[str] = None
+        self._opened_reason: Optional[str] = None
+
+    @property
+    def state(self) -> str:
+        if self._state == "open" and (time.monotonic() - self._opened_at) >= self.recovery_seconds:
+            self._state = "half_open"
+            self._half_open_calls = 0
+        return self._state
+
+    @property
+    def last_error(self) -> Optional[str]:
+        return self._last_error
+
+    @property
+    def opened_reason(self) -> Optional[str]:
+        return self._opened_reason
+
+    @property
+    def seconds_until_retry(self) -> int:
+        if self._state != "open":
+            return 0
+        remaining = self.recovery_seconds - (time.monotonic() - self._opened_at)
+        return max(0, int(remaining))
+
+    def allow_request(self) -> bool:
+        """Whether a call may proceed right now."""
+        state = self.state
+        if state == "closed":
+            return True
+        if state == "open":
+            return False
+        # half_open: allow a limited number of probe calls
+        if self._half_open_calls < self.half_open_max_calls:
+            self._half_open_calls += 1
+            return True
+        return False
+
+    def record_success(self) -> None:
+        self._failures = 0
+        self._state = "closed"
+        self._half_open_calls = 0
+        self._last_error = None
+        self._opened_reason = None
+
+    def record_failure(self, error: str, fatal: bool = False) -> None:
+        """Record a failure; `fatal` trips the breaker immediately (e.g. 429 quota)."""
+        self._last_error = error
+        if fatal:
+            self._failures = self.failure_threshold
+        else:
+            self._failures += 1
+        if self._failures >= self.failure_threshold and self._state != "open":
+            self._state = "open"
+            self._opened_at = time.monotonic()
+            self._opened_reason = error
+            logger.error("Circuit breaker '%s' OPENED: %s (retry allowed in %ss)", self.name, error, self.recovery_seconds)
 
 
 class CloudflareAIClient:
@@ -112,6 +210,23 @@ class CloudflareAIClient:
         )
         self._rate_limiter: Dict[str, float] = {}
         self._request_count: int = 0
+        # Connection pool: reuse keep-alive HTTP connections to api.cloudflare.com
+        # instead of a fresh TCP+TLS handshake on every request (requests.post).
+        self._session = requests.Session()
+        _pool_adapter = requests.adapters.HTTPAdapter(
+            pool_connections=4,      # distinct hosts pooled
+            pool_maxsize=16,         # concurrent keep-alive connections per host
+            max_retries=0,           # retries handled by our own loop + circuit breaker
+        )
+        self._session.mount("https://", _pool_adapter)
+        # One breaker per remote dependency so a Cloudflare outage never blocks
+        # local fallback logic, and vice versa.
+        self.breakers: Dict[str, CircuitBreaker] = {
+            "text": CircuitBreaker(name="cloudflare_text", failure_threshold=3, recovery_seconds=300),
+            "embeddings": CircuitBreaker(name="cloudflare_embeddings", failure_threshold=3, recovery_seconds=300),
+            "vision": CircuitBreaker(name="cloudflare_vision", failure_threshold=3, recovery_seconds=300),
+            "audio": CircuitBreaker(name="cloudflare_audio", failure_threshold=3, recovery_seconds=300),
+        }
 
     @property
     def is_configured(self) -> bool:
@@ -147,6 +262,16 @@ class CloudflareAIClient:
         models = TASK_MODELS.get(task, TASK_MODELS["text_generation"])
         return self._resolve_model(models[0])
 
+    def _breaker_for(self, model_id: str) -> CircuitBreaker:
+        """Pick the breaker matching the model family (text/embeddings/vision/audio)."""
+        if "bge" in model_id or "embed" in model_id:
+            return self.breakers["embeddings"]
+        if "vision" in model_id or "llava" in model_id:
+            return self.breakers["vision"]
+        if "whisper" in model_id or "melotts" in model_id:
+            return self.breakers["audio"]
+        return self.breakers["text"]
+
     async def _call_api(
         self,
         model: str,
@@ -164,11 +289,22 @@ class CloudflareAIClient:
 
         model_id = self._resolve_model(model)
         url = f"{self.config.base_url}/{model_id}" if endpoint is None else f"{self.config.base_url}/{endpoint}"
+        breaker = self._breaker_for(model_id)
+        if not breaker.allow_request():
+            # Short-circuit: skip the network entirely while the breaker is open.
+            retry_in = breaker.seconds_until_retry
+            logger.warning("Circuit breaker '%s' open — skipping Cloudflare AI call (retry in %ss)", breaker.name, retry_in)
+            return AIResponse(
+                content="",
+                model=model_id,
+                is_fallback=True,
+                error=f"Circuit breaker open for {breaker.name}: {breaker.opened_reason or 'recent failures'} (retry in ~{retry_in}s)",
+            )
 
         for attempt in range(self.config.max_retries):
             try:
                 def _sync_call():
-                    response = requests.post(
+                    response = self._session.post(
                         url,
                         json=payload,
                         headers=self._headers(),
@@ -178,6 +314,7 @@ class CloudflareAIClient:
                     return response.json()
 
                 raw_response = await asyncio.to_thread(_sync_call)
+                breaker.record_success()
                 
                 # Extract content based on response format
                 result = raw_response.get("result", {})
@@ -192,8 +329,19 @@ class CloudflareAIClient:
                     is_fallback=False,
                 )
 
-            except requests.exceptions.RequestException as e:
+            except requests.exceptions.HTTPError as e:
+                status = e.response.status_code if e.response is not None else None
                 logger.error(f"Cloudflare AI request failed (attempt {attempt + 1}/{self.config.max_retries}): {e}")
+                if status == 429:
+                    # Quota/rate limit — no point retrying; trip the breaker immediately.
+                    breaker.record_failure(str(e), fatal=True)
+                    return AIResponse(
+                        content="",
+                        model=model_id,
+                        is_fallback=True,
+                        error=f"Cloudflare AI rate limit or quota exhausted (429). Circuit opened; local fallback active for {breaker.recovery_seconds}s.",
+                    )
+                breaker.record_failure(str(e))
                 if attempt == self.config.max_retries - 1:
                     return AIResponse(
                         content="",
@@ -205,6 +353,7 @@ class CloudflareAIClient:
 
             except Exception as e:
                 logger.error(f"Unexpected error calling Cloudflare AI: {e}")
+                breaker.record_failure(str(e))
                 return AIResponse(
                     content="",
                     model=model_id,
@@ -523,7 +672,13 @@ class CloudflareAIClient:
 
 
 # Global client instance
-ai_client = CloudflareAIClient()
+# Global client instance — reads credentials from the environment so the
+# deployed backend actually reaches Cloudflare instead of silently falling back.
+import os as _os
+ai_client = CloudflareAIClient(
+    account_id=_os.environ.get("CLOUDFLARE_ACCOUNT_ID"),
+    api_token=_os.environ.get("CLOUDFLARE_API_TOKEN"),
+)
 
 
 def get_ai_client() -> CloudflareAIClient:
