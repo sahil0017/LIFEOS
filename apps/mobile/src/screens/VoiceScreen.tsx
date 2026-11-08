@@ -28,6 +28,8 @@ export function VoiceScreen() {
 
   useEffect(() => { const timer = setTimeout(() => { if (isApiConfigured) void loadNotes(); }, 0); return () => clearTimeout(timer); }, [loadNotes]);
 
+  useEffect(() => { void start(); }, []);
+
   async function start() {
     setError(null);
     if (!Audio) { setError('Audio recording needs a development build with expo-av.'); return; }
