@@ -19,6 +19,12 @@ const headers = {
   'Cache-Control': 'no-store',
 };
 function json(body: unknown, status = 200): Response { return Response.json(body, { status, headers }); }
+/** Routes that consume Workers AI (metered) and therefore share the rate limit. */
+const AI_ROUTES = ['/chat', '/twin/analyze', '/vision/analyze', '/context/embed', '/help/search'];
+function isAiRoute(pathname: string): boolean {
+  const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  return AI_ROUTES.includes(normalized) || /^\/(voice\/transcribe|voice\/summarize|food\/estimate|health\/insights)$/.test(normalized);
+}
 
 /**
  * Shared proxy for every fetch to the Python intelligence backend.
@@ -226,9 +232,15 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
-    const clientIp = request.headers.get('cf-connecting-ip') ?? 'unknown';
-    const { success } = await env.CHAT_LIMITER.limit({ key: clientIp });
-    if (!success) return json({ error: 'Too many requests. Please wait a minute and try again.' }, 429);
+    // Limit only the expensive Workers AI routes. Data and intelligence reads used to share
+    // this budget, so one app launch (snapshot + activity + goals + notes) spent it all and
+    // every later request returned 429. If this limit trips, return before authenticate()
+    // so the key is the IP and abusive callers cannot mint a fresh bucket per token.
+    if (isAiRoute(url.pathname)) {
+      const clientIp = request.headers.get('cf-connecting-ip') ?? 'unknown';
+      const { success } = await env.CHAT_LIMITER.limit({ key: clientIp });
+      if (!success) return json({ error: 'Too many requests. Please wait a minute and try again.' }, 429);
+    }
     if (url.pathname.startsWith('/data/')) {
       const userId = await authenticate(request);
       if (!userId) return json({ error: 'Device access could not be verified' }, 401);
@@ -640,7 +652,7 @@ export default {
       const rows = await env.lifeos_data.prepare('SELECT id, signal_type, value, created_at FROM signals WHERE user_id = ? ORDER BY created_at DESC LIMIT 50').bind(userId).all();
       return json({ signals: rows.results });
     }
-    if (!['/chat','/twin/analyze','/vision/analyze','/context/embed','/help/search'].includes(url.pathname)) return json({ error: 'Not found' }, 404);
+    if (!AI_ROUTES.includes(url.pathname)) return json({ error: 'Not found' }, 404);
     if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
     const userId = await authenticate(request);
     if (!userId) return json({error:'Device access could not be verified'},401);

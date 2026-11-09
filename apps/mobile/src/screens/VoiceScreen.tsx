@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { apiFetch, isApiConfigured } from '../api';
 
 interface VoiceNote { id: string; transcript: string; created_at: string }
@@ -11,7 +12,8 @@ function formatDate(iso: string): string {
 }
 
 export function VoiceScreen() {
-  const [recording, setRecording] = useState<RecordingLike | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder);
   const [transcript, setTranscript] = useState('');
   const [notes, setNotes] = useState<VoiceNote[]>([]);
   const [summary, setSummary] = useState('');
@@ -28,29 +30,24 @@ export function VoiceScreen() {
 
   useEffect(() => { const timer = setTimeout(() => { if (isApiConfigured) void loadNotes(); }, 0); return () => clearTimeout(timer); }, [loadNotes]);
 
-  useEffect(() => { void start(); }, []);
-
   async function start() {
+    if (recorderState.isRecording || busy) return;
     setError(null);
-    if (!Audio) { setError('Audio recording needs a development build with expo-av.'); return; }
     try {
-      const perm = await Audio.requestPermissionsAsync();
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) { setError('Microphone access is required to record.'); return; }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const rec = new Audio.Recording();
-      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await rec.startAsync();
-      setRecording(rec);
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not start recording.'); }
   }
 
   async function stop() {
-    if (!recording || busy) return;
+    if (!recorderState.isRecording || busy) return;
     setBusy(true); setError(null); setTranscript('');
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      await recorder.stop();
+      const uri = recorder.uri;
       if (!uri) throw new Error('Recording produced no audio file.');
       const res = await fetch(uri);
       const blob = await res.blob();
@@ -67,7 +64,10 @@ export function VoiceScreen() {
       await apiFetch('/voice/notes', { method: 'POST', body: JSON.stringify({ transcript: t.text }) });
       await loadNotes();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not transcribe the recording.'); }
-    finally { setBusy(false); }
+    finally {
+      setBusy(false);
+      try { await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }); } catch { /* Mode reset is best-effort. */ }
+    }
   }
 
   async function summarize() {
@@ -86,10 +86,10 @@ export function VoiceScreen() {
     <Text style={styles.title}>Spoken notes</Text>
     <Text style={styles.subtitle}>Record a thought, transcribe it, and keep it in your searchable notes.</Text>
 
-    <Pressable accessibilityRole="button" onPress={recording ? () => void stop() : () => void start()} disabled={busy} style={[styles.recordButton, recording && styles.recordingActive, busy && styles.disabled]}>
-      <Ionicons name={recording ? 'stop' : 'mic'} size={20} color={recording ? '#ff9b9b' : '#07150b'} />
-      <Text style={[styles.recordText, recording && { color: '#ff9b9b' }]}>{busy ? 'Working…' : recording ? 'Stop & transcribe' : 'Record'}</Text>
-      {recording && <View style={styles.pulse} />}
+    <Pressable accessibilityRole="button" onPress={recorderState.isRecording ? () => void stop() : () => void start()} disabled={busy} style={[styles.recordButton, recorderState.isRecording && styles.recordingActive, busy && styles.disabled]}>
+      <Ionicons name={recorderState.isRecording ? 'stop' : 'mic'} size={20} color={recorderState.isRecording ? '#ff9b9b' : '#07150b'} />
+      <Text style={[styles.recordText, recorderState.isRecording && { color: '#ff9b9b' }]}>{busy ? 'Working…' : recorderState.isRecording ? 'Stop & transcribe' : 'Record'}</Text>
+      {recorderState.isRecording && <View style={styles.pulse} />}
     </Pressable>
 
     {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
@@ -107,8 +107,7 @@ export function VoiceScreen() {
   </ScrollView>;
 }
 
-type RecordingLike = { prepareToRecordAsync: (options: Record<string, unknown>) => Promise<void>; startAsync: () => Promise<void>; stopAndUnloadAsync: () => Promise<void>; getURI: () => string | null };
-const Audio: { requestPermissionsAsync: () => Promise<{ granted: boolean }>; setAudioModeAsync: (mode: Record<string, boolean>) => Promise<void>; Recording: new () => RecordingLike; RecordingOptionsPresets: { HIGH_QUALITY: Record<string, unknown> } } | null = (() => { try { return require('expo-av').Audio; } catch { return null; } })();
+
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#06100b' },

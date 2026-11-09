@@ -77,7 +77,19 @@ export default function App() {
     {!app.busy && app.screen === 'HelpSearch' && <HelpSearchScreen query={app.helpQuery} results={app.helpResults} busy={app.helpBusy} error={app.helpError} onQuery={app.setHelpQuery} onSearch={() => void app.searchHelp()} onBack={() => app.setScreen('Modules')} />}
     {!app.busy && app.screen === 'PersonalTwin' && <PersonalTwinScreen goals={app.goals} observations={app.observations} patterns={app.patterns} scenarios={app.scenarios} embeddings={app.embeddings} insight={app.twinInsight} busy={app.twinBusy} error={app.twinError} aiAllowed={app.privacy.twinAi} configured={isApiConfigured} onOpenPrivacy={() => app.setScreen('Privacy')} onRecordObservation={app.addTwinObservation} onCreateScenario={app.addTwinScenario} onDeleteObservation={app.removeTwinObservation} onDeleteScenario={app.removeTwinScenario} onAnalyze={app.analyzeTwin} />}
     {!app.busy && app.screen === 'VisualIntelligence' && <VisualIntelligenceScreen visionReady={isApiConfigured} aiAllowed={app.privacy.visualAi} cameraGranted={Boolean(app.cameraPermission?.granted)} onOpenPrivacy={() => app.setScreen('Privacy')} busy={app.visualBusy} answer={app.visualAnswer} error={app.visualError} captures={app.visionCaptures} onSaveCapture={app.saveRemoteVisionCapture} onAnalyze={(id, image, question) => void app.analyzeVisual(id, image, question)} onDeleteCapture={app.removeVisualCapture} onClearAnswer={app.clearVisualAnswer} onBack={() => app.setScreen('Home')} />}
-    {!app.busy && app.screen === 'Privacy' && <PrivacyScreen preferences={app.privacy} cameraGranted={Boolean(app.cameraPermission?.granted)} cameraCanAskAgain={app.cameraPermission?.canAskAgain !== false} onToggle={(key, value) => void app.togglePrivacy(key, value)} onRequestCamera={() => void app.requestCameraPermission()} />}
+    {!app.busy && app.screen === 'Privacy' && <PrivacyScreen
+      preferences={app.privacy}
+      camera={app.cameraPermission ? { granted: app.cameraPermission.granted, canAskAgain: app.cameraPermission.canAskAgain } : null}
+      microphone={app.microphonePermission}
+      motion={app.motionPermission}
+      busyKey={app.privacyBusyKey}
+      error={app.privacyError}
+      onToggle={app.togglePrivacy}
+      onRequestCamera={async () => { await app.requestCameraPermission(); }}
+      onRequestMicrophone={async () => { await app.requestMicrophonePermission(); }}
+      onRequestMotion={async () => { await app.requestMotionPermission(); }}
+      onOpenSettings={app.openAppSettings}
+    />}
     <View style={styles.nav}>{nav.map((item) => <Pressable key={item.id} accessibilityRole="button" accessibilityState={{ selected: app.screen === item.id }} onPress={() => app.setScreen(item.id)} style={styles.navItem}><View style={styles.navIcon}><Ionicons name={item.icon} size={19} color={app.screen === item.id ? '#70e79a' : '#7c8d80'} /></View><Text style={[styles.navLabel, app.screen === item.id && styles.navActive]}>{item.label}</Text></Pressable>)}</View>
     <StatusBar style="light" />
   </SafeAreaView>;

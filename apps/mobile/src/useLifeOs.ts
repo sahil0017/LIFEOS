@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { Pedometer } from 'expo-sensors';
 import { useCameraPermissions } from 'expo-camera';
+import * as Linking from 'expo-linking';
 import type { Goal } from './goals';
 import type { EngineResult } from './engines';
 import { engines } from './engines';
@@ -54,6 +55,10 @@ export function useLifeOs() {
   const [autoUpdate, setAutoUpdate] = useState<{ title: string; body: string; at: string } | null>(null);
   const [autoSyncing, setAutoSyncing] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [microphonePermission, setMicrophonePermission] = useState<{ granted: boolean; canAskAgain: boolean; available?: boolean } | null>(null);
+  const [motionPermission, setMotionPermission] = useState<{ granted: boolean; canAskAgain: boolean } | null>(null);
+  const [privacyBusyKey, setPrivacyBusyKey] = useState<keyof PrivacyPreferences | null>(null);
+  const [privacyError, setPrivacyError] = useState<string | null>(null);
   const [aiHealth, setAiHealth] = useState<AiHealth | null>(null);
   const [engineRun, setEngineRun] = useState<{ busy: boolean; error: string | null; result: ModuleRunResult | null; cross: CrossModuleResult | null }>({ busy: false, error: null, result: null, cross: null });
 
@@ -108,10 +113,58 @@ export function useLifeOs() {
     return () => { active = false; };
   }, [goals]);
 
+  async function refreshNativePermissions() {
+    try {
+      const audio = getAudioModule();
+      if (!audio) {
+        setMicrophonePermission({ granted: false, canAskAgain: false, available: false });
+      } else {
+        const microphone = await audio.getRecordingPermissionsAsync();
+        setMicrophonePermission({ granted: microphone.granted, canAskAgain: microphone.canAskAgain });
+      }
+    } catch { setMicrophonePermission(null); }
+    try {
+      const motion = await Pedometer.getPermissionsAsync();
+      setMotionPermission({ granted: motion.granted, canAskAgain: motion.canAskAgain });
+    } catch { setMotionPermission(null); }
+  }
+
+  useEffect(() => {
+    const initialRefresh = setTimeout(() => { void refreshNativePermissions(); }, 0);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshNativePermissions();
+    });
+    return () => { clearTimeout(initialRefresh); subscription.remove(); };
+  }, []);
+
+  async function requestMicrophonePermission() {
+    const audio = getAudioModule();
+    if (!audio) throw new Error('Microphone recording requires a LIFEOS development build with expo-audio. Install the latest development build, then try again.');
+    const permission = await audio.requestRecordingPermissionsAsync();
+    setMicrophonePermission({ granted: permission.granted, canAskAgain: permission.canAskAgain });
+    return permission.granted;
+  }
+
+  async function requestMotionPermission() {
+    const permission = await Pedometer.requestPermissionsAsync();
+    setMotionPermission({ granted: permission.granted, canAskAgain: permission.canAskAgain });
+    return permission.granted;
+  }
+
+  async function openAppSettings() {
+    await Linking.openSettings();
+  }
+
   async function togglePrivacy(key: keyof PrivacyPreferences, enabled: boolean) {
-    await savePrivacyRemote(permissionDbKey(key), enabled);
-    setPrivacy((current) => ({ ...current, [key]: enabled }));
-    if (key === 'healthActivity' && !enabled) setActivityDays([]);
+    setPrivacyBusyKey(key); setPrivacyError(null);
+    try {
+      await savePrivacyRemote(permissionDbKey(key), enabled);
+      setPrivacy((current) => ({ ...current, [key]: enabled }));
+      if (key === 'healthActivity' && !enabled) setActivityDays([]);
+    } catch (cause) {
+      setPrivacyError(cause instanceof Error ? cause.message : 'Could not update this permission. Check your connection and try again.');
+      throw cause;
+    } finally { setPrivacyBusyKey(null); }
   }
 
   async function readDeviceSteps() {
@@ -388,6 +441,7 @@ export function useLifeOs() {
     chatInput, setChatInput, chatMessages, chatBusy, chatError, sendMessage,
     helpQuery, setHelpQuery, helpResults, helpBusy, helpError, searchHelp,
     privacy, togglePrivacy, cameraPermission, requestCameraPermission,
+    microphonePermission, motionPermission, requestMicrophonePermission, requestMotionPermission, openAppSettings, privacyBusyKey, privacyError,
     observations, patterns, scenarios, embeddings, twinInsight, twinBusy, twinError,
     addTwinObservation, addTwinScenario, removeTwinObservation, removeTwinScenario, analyzeTwin,
     visualAnswer, visualBusy, visualError, visionCaptures,
@@ -400,3 +454,13 @@ export function useLifeOs() {
 }
 
 type SearchChunk = import('./screens/types').SearchChunk;
+
+type AudioModule = typeof import('expo-audio').AudioModule;
+function getAudioModule(): AudioModule | null {
+  try {
+    return (require('expo-audio') as { AudioModule: AudioModule }).AudioModule;
+  } catch {
+    // A native binary built before expo-audio was installed has no audio module.
+    return null;
+  }
+}

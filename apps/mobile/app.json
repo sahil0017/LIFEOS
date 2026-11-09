@@ -2,11 +2,12 @@
   "expo": {
     "name": "LIFEOS",
     "slug": "lifeos",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "com.sahkanun.lifeos",
       "supportsTablet": true,
       "infoPlist": {
         "NSMotionUsageDescription": "LIFEOS reads step totals only when you request an activity refresh.",
@@ -14,6 +15,7 @@
       }
     },
     "android": {
+      "package": "com.sahkanun.lifeos",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -39,11 +41,13 @@
       ],
       "expo-secure-store",
       [
-        "expo-av",
+        "expo-audio",
         {
           "microphonePermission": "Allow LIFEOS to use the microphone to record voice notes when you tap record."
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ],
     "extra": {
       "workersAiUrl": "https://lifeos-cloudflare-ai.lifeos-cloudflare-ai.workers.dev",

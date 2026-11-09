@@ -31,6 +31,7 @@ export interface PermissionDefinition {
   title: string;
   detail: string;
   scope: PermissionScope;
+  requiredPermission?: 'camera' | 'microphone' | 'motion';
 }
 
 /**
@@ -66,6 +67,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
     title: 'Visual analysis',
     detail: 'When you tap Analyze, the selected photo and question are processed. Captured images remain stored in your LIFEOS workspace.',
     scope: 'ai',
+    requiredPermission: 'camera',
   },
   {
     key: 'healthActivity',
@@ -73,6 +75,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
     title: 'iPhone activity and step totals',
     detail: 'Allow LIFEOS to read up to seven days of step totals when you request a refresh. No background tracking.',
     scope: 'device',
+    requiredPermission: 'motion',
   },
 ];
 
